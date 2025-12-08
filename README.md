@@ -34,7 +34,7 @@ cp configs/opensmtp-filter-mimetype.example.yaml /etc/opensmtp-filter-mimetype.y
 ```
 ### 3. Configure OpenSMTPD
 ```bash
-filter "mimecheck" proc-exec "/usr/local/bin/mimefilter"
+filter "mimecheck" proc-exec "/usr/local/libexec/smtpd/mimefilter"
 
 listen on all filter "mimecheck"
 ```
