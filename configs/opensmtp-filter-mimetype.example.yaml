@@ -1,0 +1,103 @@
+# -----------------------------------------------------------------------------
+# OpenSMTPD MIME Filter Configuration
+# -----------------------------------------------------------------------------
+
+# Logging Settings
+log_tag: "mime-filter"   # Name used in /var/log/maillog
+log_level: "info"         # Options: debug, info, warn
+scanner_buffer_max_mb: 10 # Max buffer size for processing large lines (Base64)
+
+# -----------------------------------------------------------------------------
+# Whitelist of Allowed MIME Types
+# -----------------------------------------------------------------------------
+# Only the MIME types listed below are allowed. Everything else is blocked.
+# -----------------------------------------------------------------------------
+
+allowed_mime_types:
+
+  # --- Cryptography & Keys (PGP, GPG, Certificates) ---
+  # PGP / GPG (Public keys, signatures, encrypted blocks)
+  - application/pgp-keys
+  - application/pgp-signature
+  - application/pgp-encrypted
+  - application/pgp
+
+  # S/MIME & Certificates (PKCS #7)
+  - application/pkcs7-mime
+  - application/pkcs7-signature
+  - application/x-pkcs7-signature
+  - application/x-pkcs7-mime
+  - application/x-pkcs7-certificates
+
+  # Private Keys & Certificate Containers (Caution: Sensitive data!)
+  # PKCS #12 (often .p12 or .pfx files - contain Private Keys)
+  - application/x-pkcs12
+  # PKCS #8 (Private Key Info)
+  - application/pkcs8
+
+  # X.509 Certificates (SSL/TLS, .crt, .cer, .pem)
+  - application/pkix-cert
+  - application/pkix-crl
+  - application/x-x509-ca-cert
+  - application/x-x509-user-cert
+  - application/x-x509-server-cert
+
+  # PEM Files (Base64 encoded keys/certs)
+  - application/x-pem-file
+
+  # --- Standard Documents ---
+  - application/pdf
+  - application/rtf
+  - text/plain
+  - text/csv
+  - text/calendar
+  - text/vcard
+
+  # --- Microsoft Office (Modern) ---
+  - application/vnd.openxmlformats-officedocument.wordprocessingml.document
+  - application/vnd.openxmlformats-officedocument.spreadsheetml.sheet
+  - application/vnd.openxmlformats-officedocument.presentationml.presentation
+
+  # --- Microsoft Office (Legacy) ---
+  - application/msword
+  - application/vnd.ms-excel
+  - application/vnd.ms-powerpoint
+
+  # --- OpenOffice / LibreOffice ---
+  - application/vnd.oasis.opendocument.text
+  - application/vnd.oasis.opendocument.spreadsheet
+  - application/vnd.oasis.opendocument.presentation
+  - application/vnd.oasis.opendocument.graphics
+
+  # --- Images & Graphics ---
+  - image/jpeg
+  - image/png
+  - image/gif
+  - image/webp
+  - image/bmp
+  - image/tiff
+  - image/x-icon
+  - image/svg+xml
+
+  # --- Archives ---
+  # Needed as keys are often sent zipped.
+  - application/zip
+  - application/x-zip-compressed
+  - application/gzip
+  - application/x-tar
+  - application/x-bzip2
+  - application/x-7z-compressed
+
+  # --- Data Formats ---
+  - application/json
+  - application/xml
+  - text/xml
+  - text/yaml
+
+  # --- Audio/Video ---
+  - audio/mpeg
+  - audio/wav
+  - audio/ogg
+  - video/mp4
+  - video/mpeg
+  - video/webm

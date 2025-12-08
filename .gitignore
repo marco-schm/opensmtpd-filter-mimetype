@@ -1,0 +1,9 @@
+# Binaries
+mimefilter
+
+# Logs
+*.log
+
+# OS Specific
+.DS_Store
+
