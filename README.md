@@ -16,12 +16,6 @@ This project is a **MIME Whitelist Filter** designed for the **OpenSMTPD** Mail 
 
 ## Installation and Build
 
-### Prerequisites
-
-* Go 1.21 or higher
-* OpenSMTPD
-* The YAML dependency (`gopkg.in/yaml.v3`)
-
 ### Building from Source
 
 Clone the repository and use the provided `Makefile`:
