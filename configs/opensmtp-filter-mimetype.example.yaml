@@ -80,7 +80,6 @@ allowed_mime_types:
   - image/svg+xml
 
   # --- Archives ---
-  # Needed as keys are often sent zipped.
   - application/zip
   - application/x-zip-compressed
   - application/gzip
