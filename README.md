@@ -21,7 +21,7 @@ This project is a **MIME Whitelist Filter** designed for the **OpenSMTPD** Mail 
 Clone the repository and use the provided `Makefile`:
 
 ```bash
-git clone [https://github.com/marco-schm/opensmtpd-mime-filter.git](https://github.com/marco-schm/opensmtpd-mime-filter.git)
+git clone https://github.com/marco-schm/opensmtpd-mime-filter.git
 cd opensmtpd-mime-filter
 make build
 ```
