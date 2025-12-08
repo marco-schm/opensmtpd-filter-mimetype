@@ -29,7 +29,7 @@ import (
 
 // Constants
 const (
-	ConfigPath = "/etc/mx-filter-config.yaml"
+	ConfigPath = "/etc/opensmtp-filter-mimetype.yaml"
 )
 
 // Log Levels
