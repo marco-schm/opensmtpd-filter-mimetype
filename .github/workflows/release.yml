@@ -20,9 +20,10 @@ jobs:
             goarch: amd64
           - goos: linux
             goarch: arm64
-          - goos: linux
-            goarch: arm
-            goarm: 7
+          - goos: freebsd
+            goarch: amd64
+          - goos: freebsd
+            goarch: arm64
           - goos: openbsd
             goarch: amd64
           - goos: openbsd
@@ -35,7 +36,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.21'
+        go-version: '1.25.1'
 
     - name: Get Dependencies
       run: go mod download
@@ -44,18 +45,14 @@ jobs:
       env:
         GOOS: ${{ matrix.goos }}
         GOARCH: ${{ matrix.goarch }}
-        GOARM: ${{ matrix.goarm }}
       run: |
-        echo "Building for OS=${GOOS}, ARCH=${GOARCH}, ARM=${GOARM}"
+        echo "Building for OS=${GOOS}, ARCH=${GOARCH}"
         mkdir -p bin
 
         # Determine binary name
         BINARY="mimefilter-${GOOS}"
         if [[ -n "$GOARCH" ]]; then
           BINARY="$BINARY-$GOARCH"
-        fi
-        if [[ "$GOARCH" == "arm" && -n "$GOARM" ]]; then
-          BINARY="$BINARYv$GOARM"
         fi
 
         echo "Binary name: $BINARY"
@@ -90,5 +87,4 @@ jobs:
         files: ${{ env.ASSET_PATH }}
         tag_name: ${{ github.event.inputs.version }}
         body_path: release_shas.txt
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        token: ${{ secrets.GH_TOKEN }}
