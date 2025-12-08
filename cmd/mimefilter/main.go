@@ -303,25 +303,29 @@ func handleCommit(sid, token string) {
 	sessLock.Unlock()
 
 	if !exists {
-		// Should not happen, but safe fallback
 		produceOutput("filter-result", sid, token, "proceed")
 		return
 	}
 
-	// Perform security check
 	rejectReason := checkMailContent(s.message)
 
-	// Clean up memory immediately
-	handleDisconnect(sid)
+	if rejectReason == "" {
+		LogInfo("[%s] Mail accepted, forwarding DATA back to smtpd.", sid)
 
-	if rejectReason != "" {
+		for _, line := range s.message {
+			produceOutput("filter-dataline", sid, token, "%s", line)
+		}
+		produceOutput("filter-dataline", sid, token, ".")
+		produceOutput("filter-result", sid, token, "proceed")
+	} else {
 		LogWarn("[%s] REJECTING: %s", sid, rejectReason)
 		produceOutput("filter-result", sid, token, "reject|550 Policy violation: %s", rejectReason)
-	} else {
-		LogInfo("[%s] Mail accepted.", sid)
-		produceOutput("filter-result", sid, token, "proceed")
 	}
+
+	// cleanup
+	handleDisconnect(sid)
 }
+
 
 // checkMailContent parses the raw email lines using a zero-copy reader.
 // It iterates through multipart attachments and verifies them using Magic Bytes.
