@@ -2,17 +2,11 @@
 # OpenSMTPD MIME Filter Configuration
 # -----------------------------------------------------------------------------
 
-# Logging Settings
-log_tag: "mime-filter"   # Name used in /var/log/maillog
-log_level: "info"         # Options: debug, info, warn
-scanner_buffer_max_mb: 10 # Max buffer size for processing large lines (Base64)
-
-# -----------------------------------------------------------------------------
-# Whitelist of Allowed MIME Types
-# -----------------------------------------------------------------------------
-# Only the MIME types listed below are allowed. Everything else is blocked.
-# -----------------------------------------------------------------------------
-
+log_tag: "mime-filter"
+log_level: "info"   # debug / info / warn / error
+scanner_buffer_max_mb: 20   # Maximum stdin buffer size for SMTP streaming
+max_inspect_bytes: 100000    # Maximum bytes to inspect per attachment (deep scan limit)
+header_inspect_size: 512     # Bytes used for magic-byte/MIME header detection
 allowed_mime_types:
 
   # --- Cryptography & Keys (PGP, GPG, Certificates) ---
