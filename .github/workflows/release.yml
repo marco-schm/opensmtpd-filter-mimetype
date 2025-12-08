@@ -1,6 +1,5 @@
 name: Go Cross-Platform Release
 
-# Manual trigger
 on:
   workflow_dispatch:
     inputs:
@@ -36,7 +35,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.25.1'
+        go-version: '1.21'
 
     - name: Get Dependencies
       run: go mod download
@@ -68,20 +67,18 @@ jobs:
 
     - name: Create Release Archive and Compute SHA
       run: |
-        BINARY=$(ls bin/)
         ASSET_NAME="mimefilter-${{ github.event.inputs.version }}-${GOOS}-${GOARCH}"
         tar -czf "$ASSET_NAME.tar.gz" "bin/$BINARY" LICENSE README.md || true
         echo "Created archive: $ASSET_NAME.tar.gz"
 
         # Compute SHA256
         SHA=$(sha256sum "$ASSET_NAME.tar.gz" | awk '{ print $1 }')
-        echo "SHA256 for $ASSET_NAME.tar.gz: $SHA"
+        echo "${ASSET_NAME}.tar.gz: $SHA" > release_shas.txt
 
-        # Save for release body
-        echo "${ASSET_NAME}.tar.gz: $SHA" >> release_shas.txt
+        # Save archive path for upload
         echo "ASSET_PATH=$ASSET_NAME.tar.gz" >> $GITHUB_ENV
 
-    - name: Upload Release Assets and Update Release Notes
+    - name: Upload Release Asset and Update Release Notes
       uses: softprops/action-gh-release@v1
       with:
         files: ${{ env.ASSET_PATH }}
