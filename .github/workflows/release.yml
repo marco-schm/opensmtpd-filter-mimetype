@@ -1,0 +1,56 @@
+name: Go Cross-Platform Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64 
+          - goos: linux
+            goarch: arm64 
+          - goos: linux
+            goarch: arm 
+            goarm: 7
+          - goos: openbsd
+            goarch: amd64
+          - goos: openbsd
+            goarch: arm64
+            
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.25.1'
+        
+    - name: Get Dependencies
+      run: go mod download
+
+    - name: Build the Project
+      env:
+        GOOS: ${{ matrix.goos }}
+        GOARCH: ${{ matrix.goarch }}
+        GOARM: ${{ matrix.goarm }}
+      run: |
+        echo "Building for OS=${GOOS}, ARCH=${GOARCH}, ARM=${GOARM}"
+        mkdir -p bin
+        go build -o bin/mimefilter-${GOOS}-${GOARCH} ./cmd/mimefilter
+
+    - name: Create Release Archive (tar.gz)
+      run: |
+        ASSET_NAME="mimefilter-${{ github.event.inputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}"
+        tar -czf "$ASSET_NAME.tar.gz" bin/mimefilter-${GOOS}-${GOARCH} LICENSE README.md
+        ech
