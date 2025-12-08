@@ -29,8 +29,6 @@ Clone the repository and use the provided `Makefile`:
 ```bash
 git clone [https://github.com/YOUR-USERNAME/opensmtpd-mime-filter.git](https://github.com/YOUR-USERNAME/opensmtpd-mime-filter.git)
 cd opensmtpd-mime-filter
-
-# Compile the program (Binary located in bin/mimefilter)
 make build
 ```
 ## Deployment
