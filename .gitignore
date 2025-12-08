@@ -1,7 +1,4 @@
-
-# Logs
+bin
 *.log
-
-# OS Specific
 .DS_Store
 
