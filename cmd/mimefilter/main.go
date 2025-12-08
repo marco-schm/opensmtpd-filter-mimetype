@@ -12,12 +12,14 @@ package main
 
 import (
 	"bufio"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
 	"log/syslog"
 	"mime"
 	"mime/multipart"
+	"mime/quotedprintable"
 	"net/http"
 	"net/mail"
 	"os"
@@ -52,10 +54,12 @@ var (
 
 // AppConfig maps the YAML configuration file to a struct.
 type AppConfig struct {
-	LogTag           string   `yaml:"log_tag"`
-	LogLevel         string   `yaml:"log_level"`
-	ScannerBufferMB  int      `yaml:"scanner_buffer_max_mb"`
-	AllowedMimeTypes []string `yaml:"allowed_mime_types"`
+	LogTag            string   `yaml:"log_tag"`
+	LogLevel          string   `yaml:"log_level"`
+	ScannerBufferMB   int      `yaml:"scanner_buffer_max_mb"`
+	AllowedMimeTypes  []string `yaml:"allowed_mime_types"`
+	MaxInspectBytes   int      `yaml:"max_inspect_bytes"`   
+	HeaderInspectSize int      `yaml:"header_inspect_size"`
 }
 
 // session holds the email transaction state.
@@ -114,12 +118,14 @@ func main() {
 		log.SetOutput(logger)
 		log.SetFlags(0)
 	}
-	defer logger.Close()
+	if logger != nil {
+		defer logger.Close()
+	}
 
 	LogInfo("Filter started. Tag: %s, Level: %s, Buffer: %dMB", config.LogTag, config.LogLevel, config.ScannerBufferMB)
 
 	// 3. Start Output Routine (Async stdout writing)
-	outputChannel = make(chan string)
+	outputChannel = make(chan string, 100)
 	go func() {
 		for line := range outputChannel {
 			fmt.Println(line)
@@ -198,6 +204,14 @@ func loadConfig(path string) error {
 	decoder := yaml.NewDecoder(file)
 	if err := decoder.Decode(&config); err != nil {
 		return err
+	}
+
+	// Set defaults for optional fields
+	if config.HeaderInspectSize <= 0 {
+		config.HeaderInspectSize = 512
+	}
+	if config.MaxInspectBytes <= 0 {
+		config.MaxInspectBytes = 0 // 0 means only headerInspectSize
 	}
 
 	// Map string log levels to integers
@@ -332,8 +346,6 @@ func checkMailContent(lines []string) string {
 	wordDecoder := new(mime.WordDecoder)
 
 	for {
-		// NextPart() skips the previous part's data, ensuring we don't load
-		// the full attachment into RAM.
 		part, err := mr.NextPart()
 		if err == io.EOF {
 			break
@@ -348,36 +360,78 @@ func checkMailContent(lines []string) string {
 			filename = decoded
 		}
 
-		// --- MAGIC BYTES CHECK ---
-		// We read only the first 512 bytes to identify the file type.
-		head := make([]byte, 512)
-		n, _ := io.ReadFull(part, head)
+		// Determine content-transfer-encoding and set up a reader that yields decoded bytes
+		encoding := strings.ToLower(strings.TrimSpace(part.Header.Get("Content-Transfer-Encoding")))
+		var decodedReader io.Reader = part
 
-		// Skip empty parts without filename
+		switch encoding {
+		case "base64":
+			decodedReader = base64.NewDecoder(base64.StdEncoding, part)
+		case "quoted-printable":
+			decodedReader = quotedprintable.NewReader(part)
+		default:
+			// 7bit/8bit/binary or empty - part is raw binary/text
+			decodedReader = part
+		}
+
+		// Read headerInspectSize bytes for magic detection
+		headerSize := config.HeaderInspectSize
+		if headerSize <= 0 {
+			headerSize = 512
+		}
+		head := make([]byte, headerSize)
+		n, readErr := io.ReadFull(decodedReader, head)
+		if readErr != nil && readErr != io.EOF && readErr != io.ErrUnexpectedEOF {
+			// log debug and continue to next part (do not fail entire mail)
+			LogDebug("Error reading part header: %v", readErr)
+		}
+
+		// If nothing read and no filename, skip
 		if n == 0 && filename == "" {
+			// consume/skip remainder of this part implicitly by moving on
 			continue
 		}
 
-		// 1. Detect content type from bytes (Magic Bytes)
+		// Detect mime type from the decoded header bytes
 		detectedMime := http.DetectContentType(head[:n])
-
-		// 2. Normalize MIME type (remove charset parameters)
 		realMime, _, _ := mime.ParseMediaType(detectedMime)
 		if realMime == "" {
 			realMime = detectedMime
 		}
 
-		// 3. Check against Whitelist
-		// We verify if it has a filename OR if it is not a text/* part.
+		// If attachment (has filename) or non-text, enforce whitelist
 		if filename != "" || !strings.HasPrefix(realMime, "text/") {
 			if !allowedMimeMap[strings.ToLower(realMime)] {
-				// FAIL-FAST: Return immediately upon finding the first forbidden attachment.
-				// We do not continue scanning the rest of the email.
 				safeFilename := cleanString(filename)
 				safeMime := cleanString(realMime)
 				return fmt.Sprintf("Forbidden MIME type: %s (File: %s)", safeMime, safeFilename)
 			}
 			LogDebug("Attachment allowed: %s (detected as %s)", filename, realMime)
+		}
+
+		if config.MaxInspectBytes > 0 {
+			remaining := config.MaxInspectBytes
+			remaining -= n
+			if remaining > 0 {
+				buf := make([]byte, 4096)
+				for remaining > 0 {
+					toRead := buf
+					if remaining < len(buf) {
+						toRead = buf[:remaining]
+					}
+					m, err := decodedReader.Read(toRead)
+					if m > 0 {
+						remaining -= m
+					}
+					if err == io.EOF || err == io.ErrUnexpectedEOF {
+						break
+					}
+					if err != nil {
+						LogDebug("Error while chunk-scanning part: %v", err)
+						break
+					}
+				}
+			}
 		}
 	}
 	return ""
@@ -410,5 +464,11 @@ func cleanString(s string) string {
 func produceOutput(msgType, sessionId, token, format string, a ...interface{}) {
 	payload := fmt.Sprintf(format, a...)
 	out := fmt.Sprintf("%s|%s|%s|%s", msgType, sessionId, token, payload)
-	outputChannel <- out
+	// best-effort non-blocking send to avoid deadlocks on full channel
+	select {
+	case outputChannel <- out:
+	default:
+		// channel full: fallback to direct print (keeps SMTP workflow alive)
+		fmt.Println(out)
+	}
 }
