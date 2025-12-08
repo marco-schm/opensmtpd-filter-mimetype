@@ -1,6 +1,5 @@
 name: Go Cross-Platform Release
 
-# Manual trigger
 on:
   workflow_dispatch:
     inputs:
@@ -12,22 +11,22 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     strategy:
       matrix:
         include:
           - goos: linux
-            goarch: amd64 
+            goarch: amd64
           - goos: linux
-            goarch: arm64 
+            goarch: arm64
           - goos: linux
-            goarch: arm 
+            goarch: arm
             goarm: 7
           - goos: openbsd
             goarch: amd64
           - goos: openbsd
             goarch: arm64
-            
+
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
@@ -36,7 +35,7 @@ jobs:
       uses: actions/setup-go@v4
       with:
         go-version: '1.21'
-        
+
     - name: Get Dependencies
       run: go mod download
 
@@ -48,12 +47,32 @@ jobs:
       run: |
         echo "Building for OS=${GOOS}, ARCH=${GOARCH}, ARM=${GOARM}"
         mkdir -p bin
-        go build -o bin/mimefilter-${GOOS}-${GOARCH} ./cmd/mimefilter
+
+        # Determine binary name
+        BINARY="mimefilter-${GOOS}"
+        if [[ -n "$GOARCH" ]]; then
+          BINARY="$BINARY-$GOARCH"
+        fi
+        if [[ "$GOARCH" == "arm" && -n "$GOARM" ]]; then
+          BINARY="$BINARYv$GOARM"
+        fi
+
+        echo "Binary name: $BINARY"
+
+        # Build binary
+        go build -o "bin/$BINARY" ./cmd/mimefilter
+
+        # Check binary exists
+        if [[ ! -f "bin/$BINARY" ]]; then
+          echo "Error: Binary not found: bin/$BINARY"
+          exit 1
+        fi
 
     - name: Create Release Archive (tar.gz)
       run: |
-        ASSET_NAME="mimefilter-${{ github.event.inputs.version }}-${{ matrix.goos }}-${{ matrix.goarch }}"
-        tar -czf "$ASSET_NAME.tar.gz" bin/mimefilter-${GOOS}-${GOARCH} LICENSE README.md
+        BINARY=$(ls bin/)
+        ASSET_NAME="mimefilter-${{ github.event.inputs.version }}-${GOOS}-${GOARCH}"
+        tar -czf "$ASSET_NAME.tar.gz" "bin/$BINARY" LICENSE README.md || true
         echo "Created archive: $ASSET_NAME.tar.gz"
         echo "ASSET_PATH=$ASSET_NAME.tar.gz" >> $GITHUB_ENV
 
