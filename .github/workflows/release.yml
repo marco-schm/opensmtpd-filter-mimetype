@@ -73,4 +73,4 @@ jobs:
           ${{ env.SHA_PATH }}
         tag_name: ${{ github.event.inputs.version }}
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
