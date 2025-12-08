@@ -72,7 +72,7 @@ type session struct {
 	message []string
 }
 
-// produceOutput formats and sends the protocol message to stdout.
+// produceOutput formats a protocol message and sends it to the output channel.
 func produceOutput(msgType, sessionId, token, format string, a ...interface{}) {
 	payload := fmt.Sprintf(format, a...)
 	out := fmt.Sprintf("%s|%s|%s|%s", msgType, sessionId, token, payload)
@@ -169,7 +169,8 @@ func main() {
 	}
 }
 
-// loadConfig reads the YAML file and initializes the global config.
+// loadConfig reads the YAML configuration file and populates the global `config`.
+// It also initializes `allowedMimeMap` for quick MIME type lookup.
 func loadConfig(path string) error {
 	file, err := os.Open(path)
 	if err != nil {
@@ -232,7 +233,8 @@ func LogWarn(format string, v ...interface{}) {
 }
 
 // --- Handlers ---
-
+// handleDisconnect cleans up the session with the given ID.
+// At the end, the session is removed from `sessions` map.
 func handleDisconnect(sid string) {
 	sessLock.Lock()
 	delete(sessions, sid)
@@ -240,6 +242,9 @@ func handleDisconnect(sid string) {
 	LogDebug("[%s] Session cleaned up.", sid)
 }
 
+// handleDataLine appends a line of email data to the session message buffer.
+// It also handles dot-stuffing per SMTP spec and produces a filter-dataline output.
+// At the end, the line is safely stored and forwarded to OpenSMTPD.
 func handleDataLine(sid, token, line string) {
 	sessLock.Lock()
 	s, exists := sessions[sid]
@@ -260,6 +265,9 @@ func handleDataLine(sid, token, line string) {
 	produceOutput("filter-dataline", sid, token, "%s", line)
 }
 
+// handleCommit evaluates the collected session message.
+// It calls `checkMailContent` to enforce MIME whitelist rules.
+// At the end, the session is either accepted or rejected and a filter-result is sent.
 func handleCommit(sid, token string) {
 	sessLock.Lock()
 	s, exists := sessions[sid]
@@ -282,7 +290,9 @@ func handleCommit(sid, token string) {
 	}
 }
 
-// checkMailContent parses the email body and validates attachments against the whitelist.
+// checkMailContent parses the full email message and checks attachments against the whitelist.
+// For each attachment, it decodes filenames and MIME types and validates them.
+// At the end, it returns a rejection reason string if a forbidden MIME type is found, otherwise an empty string.
 func checkMailContent(lines []string) string {
 	fullMsg := strings.Join(lines, "\n")
 	reader := strings.NewReader(fullMsg)
@@ -338,6 +348,9 @@ func checkMailContent(lines []string) string {
 	return ""
 }
 
+// isAllowed checks if a MIME type is in the allowed whitelist.
+// Text/plain and text/html are always allowed by default.
+// At the end, it returns true if the MIME type is permitted, false otherwise.
 func isAllowed(m string) bool {
 	if strings.HasPrefix(m, "text/plain") || strings.HasPrefix(m, "text/html") {
 		return true
@@ -345,7 +358,8 @@ func isAllowed(m string) bool {
 	return allowedMimeMap[strings.ToLower(m)]
 }
 
-// cleanString removes non-printable characters and protocol separators ('|').
+// cleanString sanitizes a string by removing non-printable characters and '|' separators.
+// At the end, it returns a safe string suitable for logging or protocol messages.
 func cleanString(s string) string {
 	out := make([]byte, 0, len(s))
 	for i := 0; i < len(s); i++ {
