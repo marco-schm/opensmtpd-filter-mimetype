@@ -2,7 +2,7 @@
 
 ## Project Description
 
-This project is a high-performance **MIME Whitelist Filter** designed for the **OpenSMTPD** Mail Transfer Agent. It strictly enforces a content policy by blocking any attachment whose MIME type is not explicitly listed in the **YAML** configuration. The filter is built with robustness in mind, utilizing a pass-through architecture and **protocol sanitization** to maintain daemon stability and prevent integrity violations within the OpenSMTPD communication channel.
+This project is a **MIME Whitelist Filter** designed for the **OpenSMTPD** Mail Transfer Agent. It strictly enforces a content policy by blocking any attachment whose MIME type is not explicitly listed in the **YAML** configuration.
 
 ---
 
