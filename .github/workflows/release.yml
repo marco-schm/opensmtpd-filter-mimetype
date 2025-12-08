@@ -40,13 +40,12 @@ jobs:
     - name: Get Dependencies
       run: go mod download
 
-    - name: Build the Project
+    - name: Build the Project and Collect Assets
       env:
         GOOS: ${{ matrix.goos }}
         GOARCH: ${{ matrix.goarch }}
       run: |
-        echo "Building for OS=${GOOS}, ARCH=${GOARCH}"
-        mkdir -p bin
+        mkdir -p bin release_assets
 
         # Determine binary name
         BINARY="mimefilter-${GOOS}"
@@ -54,34 +53,26 @@ jobs:
           BINARY="$BINARY-$GOARCH"
         fi
 
-        echo "Binary name: $BINARY"
+        echo "Building binary: $BINARY"
 
         # Build binary
         go build -o "bin/$BINARY" ./cmd/mimefilter
 
-        # Check binary exists
-        if [[ ! -f "bin/$BINARY" ]]; then
-          echo "Error: Binary not found: bin/$BINARY"
-          exit 1
-        fi
-
-    - name: Create Release Archive and Compute SHA
-      run: |
-        ASSET_NAME="mimefilter-${{ github.event.inputs.version }}-${GOOS}-${GOARCH}"
-        tar -czf "$ASSET_NAME.tar.gz" "bin/$BINARY" LICENSE README.md || true
-        echo "Created archive: $ASSET_NAME.tar.gz"
+        # Create archive
+        ARCHIVE="release_assets/$BINARY.tar.gz"
+        tar -czf "$ARCHIVE" "bin/$BINARY" LICENSE README.md
 
         # Compute SHA256
-        SHA=$(sha256sum "$ASSET_NAME.tar.gz" | awk '{ print $1 }')
-        echo "${ASSET_NAME}.tar.gz: $SHA" > release_shas.txt
+        SHA=$(sha256sum "$ARCHIVE" | awk '{print $1}')
+        echo "$ARCHIVE: $SHA" >> release_assets/shas.txt
 
-        # Save archive path for upload
-        echo "ASSET_PATH=$ASSET_NAME.tar.gz" >> $GITHUB_ENV
+        # Print for debugging
+        cat release_assets/shas.txt
 
-    - name: Upload Release Asset and Update Release Notes
+    - name: Upload Release Assets and Add SHA to Release Notes
       uses: softprops/action-gh-release@v1
       with:
-        files: ${{ env.ASSET_PATH }}
+        files: release_assets/*.tar.gz
         tag_name: ${{ github.event.inputs.version }}
-        body_path: release_shas.txt
+        body_path: release_assets/shas.txt
         token: ${{ secrets.GH_TOKEN }}
