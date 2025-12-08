@@ -2,7 +2,7 @@
 
 ## Project Description
 
-This project is a **MIME Whitelist Filter** designed for the **OpenSMTPD** Mail Transfer Agent. It strictly enforces a content policy by blocking any attachment whose MIME type is not explicitly listed in the **YAML** configuration.
+This project is a MIME Whitelist Filter for the OpenSMTPD Mail Transfer Agent. It enforces a strict content policy by blocking any email that contains an attachment with a MIME type not explicitly listed in the YAML configuration.
 
 ---
 
@@ -10,8 +10,6 @@ This project is a **MIME Whitelist Filter** designed for the **OpenSMTPD** Mail 
 
 * **Strict Whitelist Control:** Blocks all attachments whose MIME type is not explicitly allowed.
 * **YAML Configuration:** Enables simple, commented management of the whitelist (`allowed_mime_types`) and logging settings.
-* **Stability:** Implements **Panic Recovery** and **Thread Safety (Mutex)** to prevent filter crashes and data corruption during concurrent transactions.
-* **Security:** Performs **Sanitization** of all user input before integrating it into SMTP protocol responses to prevent protocol injection.
 * **Configurable Logging:** Supports adjustable logging levels (`debug`, `info`, `warn`) for granular monitoring via Syslog.
 
 ## Installation and Build
@@ -36,7 +34,7 @@ cp configs/opensmtp-filter-mimetype.example.yaml /etc/opensmtp-filter-mimetype.y
 ```
 ### 3. Configure OpenSMTPD
 ```bash
-filter "mimecheck" proc-exec "/usr/local/bin/mimefilter"
+filter "mimecheck" proc-exec "/usr/local/libexec/smtpd/mimefilter"
 
 listen on all filter "mimecheck"
 ```
