@@ -8,6 +8,9 @@ build:
 	mkdir -p $(BUILD_DIR)
 	go build -o $(BUILD_DIR)/$(BINARY_NAME) cmd/mimefilter/main.go
 
+test:
+	@echo "Running tests..."
+	go test -v ./...
 
 clean:
 	@echo "Cleaning..."
@@ -19,4 +22,4 @@ run:
 fmt:
 	go fmt ./...
 
-.PHONY: all build clean run fmt
+.PHONY: all build clean run fmt test
