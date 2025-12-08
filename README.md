@@ -30,7 +30,7 @@ cp bin/mimefilter /usr/local/libexec/smtpd/
 ```
 ### 2. Copy Configuration
 ```bash
-cp configs/opensmtp-filter-mimetype.example.yaml /etc/opensmtp-filter-mimetype.yaml
+cp configs/opensmtpd-filter-mimetype.example.yaml /etc/opensmtp-filter-mimetype.yaml
 ```
 ### 3. Configure OpenSMTPD
 ```bash
