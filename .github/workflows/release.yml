@@ -1,5 +1,6 @@
 name: Go Cross-Platform Release
 
+# Manual trigger
 on:
   workflow_dispatch:
     inputs:
@@ -68,28 +69,26 @@ jobs:
           exit 1
         fi
 
-    - name: Create Release Archive (tar.gz)
+    - name: Create Release Archive and Compute SHA
       run: |
         BINARY=$(ls bin/)
         ASSET_NAME="mimefilter-${{ github.event.inputs.version }}-${GOOS}-${GOARCH}"
         tar -czf "$ASSET_NAME.tar.gz" "bin/$BINARY" LICENSE README.md || true
         echo "Created archive: $ASSET_NAME.tar.gz"
+
+        # Compute SHA256
+        SHA=$(sha256sum "$ASSET_NAME.tar.gz" | awk '{ print $1 }')
+        echo "SHA256 for $ASSET_NAME.tar.gz: $SHA"
+
+        # Save for release body
+        echo "${ASSET_NAME}.tar.gz: $SHA" >> release_shas.txt
         echo "ASSET_PATH=$ASSET_NAME.tar.gz" >> $GITHUB_ENV
 
-    - name: Create SHA256 Hash
-      run: |
-        SHA_FILE="${{ env.ASSET_PATH }}.sha256"
-        sha256sum "${{ env.ASSET_PATH }}" > "$SHA_FILE"
-        echo "SHA256 hash:"
-        cat "$SHA_FILE"
-        echo "SHA_PATH=$SHA_FILE" >> $GITHUB_ENV
-
-    - name: Upload Release Assets
+    - name: Upload Release Assets and Update Release Notes
       uses: softprops/action-gh-release@v1
       with:
-        files: |
-          ${{ env.ASSET_PATH }}
-          ${{ env.SHA_PATH }}
+        files: ${{ env.ASSET_PATH }}
         tag_name: ${{ github.event.inputs.version }}
+        body_path: release_shas.txt
       env:
-        GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
