@@ -35,7 +35,7 @@ jobs:
     - name: Set up Go
       uses: actions/setup-go@v4
       with:
-        go-version: '1.21'
+        go-version: '1.25.1'
 
     - name: Get Dependencies
       run: go mod download
@@ -62,12 +62,6 @@ jobs:
         ARCHIVE="release_assets/$BINARY.tar.gz"
         tar -czf "$ARCHIVE" "bin/$BINARY" LICENSE README.md
 
-        # Compute SHA256
-        SHA=$(sha256sum "$ARCHIVE" | awk '{print $1}')
-        echo "$ARCHIVE: $SHA" >> release_assets/shas.txt
-
-        # Print for debugging
-        cat release_assets/shas.txt
 
     - name: Upload Release Assets and Add SHA to Release Notes
       uses: softprops/action-gh-release@v1
