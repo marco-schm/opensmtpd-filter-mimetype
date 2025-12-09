@@ -10,7 +10,7 @@ build:
 
 test:
 	@echo "Running tests..."
-	go test -v ./...
+	cat integration/mail.txt | ./bin/mimefilter
 
 clean:
 	@echo "Cleaning..."
