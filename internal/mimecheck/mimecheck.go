@@ -18,6 +18,7 @@ import (
 // headerInspectSize: bytes to read for MIME detection
 // Returns a rejection reason string if disallowed content is found, empty otherwise.
 func CheckMailPart(lines []string, allowedMime map[string]bool, headerInspectSize int) string {
+	
 	// Join only enough lines to parse headers
 	msg, err := mail.ReadMessage(strings.NewReader(strings.Join(lines, "\n")))
 	if err != nil {

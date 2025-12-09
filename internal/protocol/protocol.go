@@ -42,29 +42,31 @@ func (p *ProtocolHandler) HandleDataLine(sid, token, line string) {
 		}
 	}
 
-	p.produceOutput("filter-dataline", sid, token, "%s", line)
+	//p.produceOutput("filter-dataline", sid, token, "%s", line)
 }
 
 // HandleCommit checks the email content and accepts or rejects the message.
 func (p *ProtocolHandler) HandleCommit(sid, token string) {
-	s := p.SessionManager.GetOrCreate(sid)
+    s := p.SessionManager.GetOrCreate(sid)
 
-	rejectReason := p.CheckFunc(s.Message, p.AllowedMime, p.HeaderSize)
+    rejectReason := p.CheckFunc(s.Message, p.AllowedMime, p.HeaderSize)
 
-	if rejectReason == "" {
-		log.Info("[%s] Mail accepted.", sid)
-		for _, line := range s.Message {
-			p.produceOutput("filter-dataline", sid, token, "%s", line)
-		}
-		p.produceOutput("filter-dataline", sid, token, ".")
-		p.produceOutput("filter-result", sid, token, "proceed")
-	} else {
-		log.Warn("[%s] REJECTING: %s", sid, rejectReason)
-		p.produceOutput("filter-result", sid, token, "reject|550 Policy violation: %s", rejectReason)
-	}
+    if rejectReason == "" {
+        log.Info("[%s] Mail accepted.", sid)
+        for _, line := range s.Message {
+            p.produceOutput("filter-dataline", sid, token, "%s", line)
+        }
+        p.produceOutput("filter-dataline", sid, token, ".")
+        p.produceOutput("filter-result", sid, token, "proceed")
+    } else {
+        log.Warn("[%s] REJECTING: %s", sid, rejectReason)
+        // keine Message-Zeilen senden bei reject
+        p.produceOutput("filter-result", sid, token, "reject|550 Policy violation: %s", rejectReason)
+    }
 
-	p.SessionManager.Delete(sid)
+    p.SessionManager.Delete(sid)
 }
+
 
 // HandleDisconnect cleans up the session when a client disconnects.
 func (p *ProtocolHandler) HandleDisconnect(sid string) {
