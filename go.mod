@@ -1,4 +1,4 @@
-module github.com/marco-schm/opensmtpd-filter-mime
+module github.com/marco-schm/opensmtpd-filter-mimetype
 
 go 1.25.1
 
