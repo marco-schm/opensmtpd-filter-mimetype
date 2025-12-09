@@ -16,13 +16,14 @@ import (
 const ConfigPath = "/etc/opensmtpd-filter-mimetype.yaml"
 
 func main() {
+	// Load configuration
 	cfg, allowedMime, logLevel, err := config.LoadConfig(ConfigPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "CRITICAL: Failed to load config: %v\n", err)
 		os.Exit(1)
 	}
 
-	// Logging
+	// Initialize syslog
 	sysLogger, err := syslog.New(syslog.LOG_INFO|syslog.LOG_MAIL, cfg.LogTag)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "CRITICAL: Syslog connection failed: %v\n", err)
@@ -43,9 +44,10 @@ func main() {
 
 	// Session manager
 	sessMgr := session.NewManager()
-	handler := protocol.NewProtocolHandler(sessMgr, allowedMime, cfg.HeaderInspectSize, cfg.MaxInspectBytes, outputChan)
+	headerSize := cfg.HeaderInspectSize
+	handler := protocol.NewProtocolHandler(sessMgr, allowedMime, headerSize, outputChan)
 
-	// Input scanner
+	// Input scanner with buffer
 	scanner := bufio.NewScanner(os.Stdin)
 	bufferBytes := cfg.ScannerBufferMB * 1024 * 1024
 	if bufferBytes < 1024*1024 {
@@ -55,7 +57,7 @@ func main() {
 	buf := make([]byte, 0, bufferBytes)
 	scanner.Buffer(buf, bufferBytes)
 
-	// Register hooks
+	// Register hooks with OpenSMTPD
 	fmt.Println("register|filter|smtp-in|data-line")
 	fmt.Println("register|filter|smtp-in|commit")
 	fmt.Println("register|report|smtp-in|link-disconnect")
@@ -68,6 +70,7 @@ func main() {
 		if len(parts) < 3 {
 			continue
 		}
+
 		eventType := parts[0]
 
 		func() {

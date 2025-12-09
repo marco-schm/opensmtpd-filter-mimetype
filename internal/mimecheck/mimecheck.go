@@ -1,7 +1,6 @@
 package mimecheck
 
 import (
-	"bufio"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -13,48 +12,23 @@ import (
 	"strings"
 )
 
-type StringSliceReader struct {
-	lines []string
-	curr  int
-	r     *strings.Reader
-}
-
-func NewStringSliceReader(lines []string) *StringSliceReader {
-	return &StringSliceReader{lines: lines}
-}
-
-func (r *StringSliceReader) Read(p []byte) (n int, err error) {
-	for {
-		if r.r == nil {
-			if r.curr >= len(r.lines) {
-				return 0, io.EOF
-			}
-			r.r = strings.NewReader(r.lines[r.curr] + "\n")
-			r.curr++
-		}
-		n, err = r.r.Read(p)
-		if err == io.EOF {
-			r.r = nil
-			if n > 0 {
-				return n, nil
-			}
-			continue
-		}
-		return n, err
-	}
-}
-
-func CheckMailContent(lines []string, allowedMime map[string]bool, headerInspectSize, maxInspectBytes int) string {
-	r := NewStringSliceReader(lines)
-
-	msg, err := mail.ReadMessage(r)
+// CheckMailPart scans only relevant parts of a multipart email (attachments or non-text)
+// lines: raw email lines collected so far
+// allowedMime: map of allowed MIME types (lowercase)
+// headerInspectSize: bytes to read for MIME detection
+// Returns a rejection reason string if disallowed content is found, empty otherwise.
+func CheckMailPart(lines []string, allowedMime map[string]bool, headerInspectSize int) string {
+	// Join only enough lines to parse headers
+	msg, err := mail.ReadMessage(strings.NewReader(strings.Join(lines, "\n")))
 	if err != nil {
+		// Failed parsing headers: ignore
 		return ""
 	}
 
+	// Check if Content-Type is multipart
 	mediaType, params, err := mime.ParseMediaType(msg.Header.Get("Content-Type"))
 	if err != nil || !strings.HasPrefix(mediaType, "multipart/") {
-		return ""
+		return "" // Nothing to check if not multipart
 	}
 
 	mr := multipart.NewReader(msg.Body, params["boundary"])
@@ -66,26 +40,28 @@ func CheckMailContent(lines []string, allowedMime map[string]bool, headerInspect
 			break
 		}
 		if err != nil {
-			continue
+			continue // Skip malformed parts
 		}
 
+		// Decode filename if MIME-encoded
 		filename := part.FileName()
 		if decoded, err := wordDecoder.DecodeHeader(filename); err == nil && decoded != "" {
 			filename = decoded
 		}
 
+		// Determine content transfer encoding
 		encoding := strings.ToLower(strings.TrimSpace(part.Header.Get("Content-Transfer-Encoding")))
-		var decodedReader io.Reader = part
-
+		var reader io.Reader = part
 		switch encoding {
 		case "base64":
-			decodedReader = base64.NewDecoder(base64.StdEncoding, part)
+			reader = base64.NewDecoder(base64.StdEncoding, part)
 		case "quoted-printable":
-			decodedReader = quotedprintable.NewReader(part)
+			reader = quotedprintable.NewReader(part)
 		}
 
+		// Read only the first few bytes for MIME detection
 		head := make([]byte, headerInspectSize)
-		n, _ := io.ReadFull(decodedReader, head)
+		n, _ := io.ReadFull(reader, head)
 		if n == 0 && filename == "" {
 			continue
 		}
@@ -96,38 +72,22 @@ func CheckMailContent(lines []string, allowedMime map[string]bool, headerInspect
 			realMime = detectedMime
 		}
 
+		// Only enforce whitelist for attachments or non-text content
 		if filename != "" || !strings.HasPrefix(realMime, "text/") {
 			if !allowedMime[strings.ToLower(realMime)] {
-				return fmt.Sprintf("Forbidden MIME type: %s (File: %s)", CleanString(realMime), CleanString(filename))
-			}
-		}
-
-		if maxInspectBytes > 0 {
-			remaining := maxInspectBytes - n
-			if remaining > 0 {
-				buf := make([]byte, 4096)
-				for remaining > 0 {
-					toRead := buf
-					if remaining < len(buf) {
-						toRead = buf[:remaining]
-					}
-					m, err := decodedReader.Read(toRead)
-					if m > 0 {
-						remaining -= m
-					}
-					if err == io.EOF || err == io.ErrUnexpectedEOF {
-						break
-					}
-					if err != nil {
-						break
-					}
-				}
+				return fmt.Sprintf(
+					"Forbidden MIME type: %s (File: %s)",
+					CleanString(realMime),
+					CleanString(filename),
+				)
 			}
 		}
 	}
-	return ""
+
+	return "" // All relevant parts are allowed
 }
 
+// CleanString replaces non-printable or dangerous characters for safe logging/output
 func CleanString(s string) string {
 	out := make([]byte, 0, len(s))
 	for i := 0; i < len(s); i++ {
