@@ -6,10 +6,10 @@ import (
 	"os"
 	"strings"
 
-	"opensmtp-filter-mimetype/internal/config"
-	"opensmtp-filter-mimetype/internal/log"
-	"opensmtp-filter-mimetype/internal/protocol"
-	"opensmtp-filter-mimetype/internal/session"
+	"opensmtp-filter-mime/internal/config"
+	"opensmtp-filter-mime/internal/log"
+	"opensmtp-filter-mime/internal/protocol"
+	"opensmtp-filter-mime/internal/session"
 	"log/syslog"
 )
 
