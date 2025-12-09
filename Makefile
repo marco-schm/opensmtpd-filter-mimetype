@@ -8,10 +8,6 @@ build:
 	mkdir -p $(BUILD_DIR)
 	go build -o $(BUILD_DIR)/$(BINARY_NAME) cmd/mimefilter/main.go
 
-test:
-	@echo "Running tests..."
-	cat integration/mail.txt | ./bin/mimefilter
-
 clean:
 	@echo "Cleaning..."
 	rm -rf $(BUILD_DIR)
