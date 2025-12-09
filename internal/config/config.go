@@ -16,22 +16,29 @@ type AppConfig struct {
 	HeaderInspectSize int      `yaml:"header_inspect_size"`
 }
 
-// LoadConfig liest die YAML-Konfiguration, erstellt die MIME-Whitelist und
-// gibt den numerischen Log-Level zurück
+// LoadConfig liest eine YAML-Datei und gibt die Konfiguration,
+// die erlaubten MIME-Typen als Map sowie das Log-Level zurück
 func LoadConfig(path string) (AppConfig, map[string]bool, int, error) {
 	var cfg AppConfig
-
 	file, err := os.Open(path)
 	if err != nil {
 		return cfg, nil, 0, err
 	}
 	defer file.Close()
 
-	decoder := yaml.NewDecoder(file)
-	if err := decoder.Decode(&cfg); err != nil {
+	if err := yaml.NewDecoder(file).Decode(&cfg); err != nil {
 		return cfg, nil, 0, err
 	}
 
+	setDefaults(&cfg)
+
+	level := mapLogLevel(cfg.LogLevel)
+	mimeMap := makeMimeMap(cfg.AllowedMimeTypes)
+
+	return cfg, mimeMap, level, nil
+}
+
+func setDefaults(cfg *AppConfig) {
 	if cfg.HeaderInspectSize <= 0 {
 		cfg.HeaderInspectSize = 512
 	}
@@ -39,25 +46,27 @@ func LoadConfig(path string) (AppConfig, map[string]bool, int, error) {
 		cfg.ScannerBufferMB = 10
 	}
 	if cfg.LogTag == "" {
-		cfg.LogTag = "mx-generic-filter"
+		cfg.LogTag = "mime-filter"
 	}
+}
 
-	// Log-Level Mapping
-	level := 1 // info default
-	switch strings.ToLower(cfg.LogLevel) {
+func mapLogLevel(level string) int {
+	switch strings.ToLower(level) {
 	case "debug":
-		level = 0
+		return 0
 	case "warn":
-		level = 2
+		return 2
 	case "error":
-		level = 3
+		return 3
+	default:
+		return 1 
 	}
+}
 
-	// MIME-Whitelist
-	mimeMap := make(map[string]bool)
-	for _, m := range cfg.AllowedMimeTypes {
-		mimeMap[strings.ToLower(m)] = true
+func makeMimeMap(mimeTypes []string) map[string]bool {
+	m := make(map[string]bool)
+	for _, mt := range mimeTypes {
+		m[strings.ToLower(mt)] = true
 	}
-
-	return cfg, mimeMap, level, nil
+	return m
 }

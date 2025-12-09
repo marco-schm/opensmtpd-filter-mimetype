@@ -2,26 +2,28 @@ package log
 
 import "log"
 
-var currentLogLevel int
-
-func SetLevel(level int) {
-	currentLogLevel = level
+type Logger struct {
+	level int
 }
 
-func Debug(format string, v ...interface{}) {
-	if currentLogLevel <= 0 {
+func New(level int) *Logger {
+	return &Logger{level: level}
+}
+
+func (l *Logger) Debug(format string, v ...interface{}) {
+	if l.level <= 0 {
 		log.Printf("[DEBUG] "+format, v...)
 	}
 }
 
-func Info(format string, v ...interface{}) {
-	if currentLogLevel <= 1 {
+func (l *Logger) Info(format string, v ...interface{}) {
+	if l.level <= 1 {
 		log.Printf("[INFO] "+format, v...)
 	}
 }
 
-func Warn(format string, v ...interface{}) {
-	if currentLogLevel <= 2 {
+func (l *Logger) Warn(format string, v ...interface{}) {
+	if l.level <= 2 {
 		log.Printf("[WARN] "+format, v...)
 	}
 }
