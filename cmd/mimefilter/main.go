@@ -18,9 +18,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ------------------------
-// Config
-// ------------------------
 type AppConfig struct {
 	LogTag            string   `yaml:"log_tag"`
 	LogLevel          string   `yaml:"log_level"`
@@ -72,9 +69,6 @@ func LoadConfig(path string) (AppConfig, map[string]bool, int, error) {
 	return cfg, mimeMap, level, nil
 }
 
-// ------------------------
-// Logging
-// ------------------------
 var currentLogLevel int
 
 func SetLevel(level int) {
@@ -99,9 +93,6 @@ func Warn(format string, v ...interface{}) {
 	}
 }
 
-// ------------------------
-// Session Management
-// ------------------------
 type Session struct {
 	ID      string
 	Message []string
@@ -135,9 +126,6 @@ func (m *Manager) Delete(id string) {
 	delete(m.sessions, id)
 }
 
-// ------------------------
-// MIME Check
-// ------------------------
 func CheckMailPart(lines []string, allowedMime map[string]bool, headerInspectSize int) string {
 	rawMail := strings.Join(lines, "\n")
 	if strings.TrimSpace(rawMail) == "" {
@@ -228,9 +216,6 @@ func CleanString(s string) string {
 	return string(out)
 }
 
-// ------------------------
-// Protocol Handler
-// ------------------------
 type ProtocolHandler struct {
 	SessionManager *Manager
 	AllowedMime    map[string]bool
@@ -252,9 +237,7 @@ func NewProtocolHandler(sessMgr *Manager, allowedMime map[string]bool, headerSiz
 func (p *ProtocolHandler) HandleDataLine(sid, token, line string) {
 	s := p.SessionManager.GetOrCreate(sid)
 
-	// Speichern aller Zeilen, inkl. "."-Zeile
 	if line == "." {
-		// Markiere Ende der Nachricht
 		s.Message = append(s.Message, line)
 		Debug("[%s] DATA-LINE: End of message (.)", sid)
 	} else {
@@ -266,7 +249,7 @@ func (p *ProtocolHandler) HandleDataLine(sid, token, line string) {
 		Debug("[%s] DATA-LINE: %s", sid, line)
 	}
 
-	// Immer Data-Line ausgeben, damit OpenSMTPD sie sieht
+
 	p.produceOutput("filter-dataline", sid, token, "%s", line)
 }
 
@@ -319,9 +302,6 @@ func (p *ProtocolHandler) produceOutput(msgType, sid, token, format string, a ..
 	}
 }
 
-// ------------------------
-// Main
-// ------------------------
 const ConfigPath = "/etc/opensmtpd-filter-mimetype.yaml"
 
 func main() {
