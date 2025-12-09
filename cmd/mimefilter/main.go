@@ -6,14 +6,14 @@ import (
 	"os"
 	"strings"
 
-	"opensmtp-filter-mime/internal/config"
-	"opensmtp-filter-mime/internal/log"
-	"opensmtp-filter-mime/internal/protocol"
-	"opensmtp-filter-mime/internal/session"
+	"opensmtpd-filter-mime/internal/config"
+	"opensmtpd-filter-mime/internal/log"
+	"opensmtpd-filter-mime/internal/protocol"
+	"opensmtpd-filter-mime/internal/session"
 	"log/syslog"
 )
 
-const ConfigPath = "/etc/opensmtp-filter-mimetype.yaml"
+const ConfigPath = "/etc/opensmtpd-filter-mimetype.yaml"
 
 func main() {
 	cfg, allowedMime, logLevel, err := config.LoadConfig(ConfigPath)

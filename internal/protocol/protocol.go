@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"sync"
 
-	"opensmtp-filter-mime/internal/log"
-	"opensmtp-filter-mime/internal/mimecheck"
-	"opensmtp-filter-mime/internal/session"
+	"opensmtpd-filter-mime/internal/log"
+	"opensmtpd-filter-mime/internal/mimecheck"
+	"opensmtpd-filter-mime/internal/session"
 )
 
 type ProtocolHandler struct {
