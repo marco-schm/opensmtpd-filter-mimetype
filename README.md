@@ -42,16 +42,7 @@ listen on all filter "mimecheck"
 
 ---
 
-## Configuration
 
-Configuration is managed via the file `/etc/opensmtp-filter-mimetype.yaml`.
-
-| YAML Key                | Description                                                                 | Default Value      |
-|-------------------------|-----------------------------------------------------------------------------|------------------|
-| `log_tag`               | The tag used in Syslog.                                                     | `"mime-filter"`  |
-| `log_level`             | Sets the logging detail level: debug, info, or warn.                        | `"info"`          |
-| `scanner_buffer_max_mb` | The maximum line size (in MB) for the protocol scanner to prevent DoS attacks with extremely long Base64 lines. | `10`              |
-| `allowed_mime_types`    | The YAML list of explicitly allowed MIME types.                             | `[...]`           |
 
 # MIT License
 
