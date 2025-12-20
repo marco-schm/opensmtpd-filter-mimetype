@@ -1,4 +1,4 @@
-# OpenSMTPD MIME Whitelist Filter
+# Some Bugs: NO NOT USE ... OpenSMTPD MIME Whitelist Filter
 
 ## Project Description
 
