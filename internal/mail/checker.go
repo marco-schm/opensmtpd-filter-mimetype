@@ -13,6 +13,30 @@ import (
 	"github.com/marco-schm/opensmtpd-filter-mimetype/internal/logging"
 )
 
+// whitespaceStripper wraps an io.Reader and strips CR, LF, space, and tab
+// characters from the stream. This is needed for base64-encoded email parts,
+// which contain newlines every 76 characters that the standard base64 decoder
+// cannot handle.
+type whitespaceStripper struct {
+	r io.Reader
+}
+
+func (w *whitespaceStripper) Read(p []byte) (int, error) {
+	for {
+		n, err := w.r.Read(p)
+		j := 0
+		for i := 0; i < n; i++ {
+			if p[i] != '\r' && p[i] != '\n' && p[i] != ' ' && p[i] != '\t' {
+				p[j] = p[i]
+				j++
+			}
+		}
+		if j > 0 || err != nil {
+			return j, err
+		}
+	}
+}
+
 func CheckMailPart(lines []string, allowed map[string]bool, headerInspectSize int) string {
 	rawMail := strings.Join(lines, "\n")
 	if strings.TrimSpace(rawMail) == "" {
@@ -63,7 +87,7 @@ func CheckMailPart(lines []string, allowed map[string]bool, headerInspectSize in
 		var reader io.Reader = part
 		switch encoding {
 		case "base64":
-			reader = base64.NewDecoder(base64.StdEncoding, part)
+			reader = base64.NewDecoder(base64.StdEncoding, &whitespaceStripper{r: part})
 		case "quoted-printable":
 			reader = quotedprintable.NewReader(part)
 		}
