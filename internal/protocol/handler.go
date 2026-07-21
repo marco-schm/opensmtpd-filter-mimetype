@@ -30,13 +30,12 @@ func NewProtocolHandler(sessMgr *session.Manager, allowed map[string]bool, heade
 
 func (p *ProtocolHandler) HandleDataLine(sid, token, line string) {
 	s := p.SessionManager.GetOrCreate(sid)
-	if line == "." {
-		s.Message = append(s.Message, line)
-	} else {
-		if strings.HasPrefix(line, "..") {
-			line = line[1:]
+	if line != "." {
+		storeLine := line
+		if strings.HasPrefix(storeLine, "..") {
+			storeLine = storeLine[1:]
 		}
-		s.Message = append(s.Message, line)
+		s.Message = append(s.Message, storeLine)
 	}
 	p.produceOutput("filter-dataline", sid, token, "%s", line)
 }
@@ -45,6 +44,9 @@ func (p *ProtocolHandler) HandleCommit(sid, token string) {
 	s := p.SessionManager.GetOrCreate(sid)
 	hasHeader := false
 	for _, l := range s.Message {
+		if l == "" {
+			break
+		}
 		if strings.Contains(l, ":") {
 			hasHeader = true
 			break
