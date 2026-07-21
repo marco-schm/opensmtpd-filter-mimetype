@@ -24,25 +24,24 @@ func main() {
 	logging.SetLevel(logLevel)
 	logging.Info("Filter started. Tag: %s Level: %s Buffer=%dMB", cfg.LogTag, cfg.LogLevel, cfg.ScannerBufferMB)
 
-	outputChan := make(chan string, 200)
-	go func() {
-		for line := range outputChan {
-			fmt.Println(line)
-		}
-	}()
+	writer := bufio.NewWriter(os.Stdout)
 
 	manager := session.NewManager()
-	handler := protocol.NewProtocolHandler(manager, allowedMime, cfg.HeaderInspectSize, outputChan)
+	handler := protocol.NewProtocolHandler(manager, allowedMime, cfg.HeaderInspectSize, writer)
 
 	scanner := bufio.NewScanner(os.Stdin)
 	bufferBytes := cfg.ScannerBufferMB * 1024 * 1024
 	buf := make([]byte, 0, bufferBytes)
 	scanner.Buffer(buf, bufferBytes)
 
-	fmt.Println("register|filter|smtp-in|data-line")
-	fmt.Println("register|filter|smtp-in|commit")
-	fmt.Println("register|report|smtp-in|link-disconnect")
-	fmt.Println("register|ready")
+	fmt.Fprintln(writer, "register|filter|smtp-in|data-line")
+	fmt.Fprintln(writer, "register|filter|smtp-in|commit")
+	fmt.Fprintln(writer, "register|report|smtp-in|link-disconnect")
+	fmt.Fprintln(writer, "register|ready")
+	if err := writer.Flush(); err != nil {
+		fmt.Fprintf(os.Stderr, "CRITICAL: Failed to write registration: %v\n", err)
+		os.Exit(1)
+	}
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -79,6 +78,11 @@ func main() {
 				}
 			}
 		}()
+	}
+
+	if err := scanner.Err(); err != nil {
+		logging.Warn("Reading stdin failed: %v", err)
+		os.Exit(1)
 	}
 }
 
