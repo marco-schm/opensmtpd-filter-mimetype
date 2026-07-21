@@ -18,6 +18,29 @@ import (
 // skipped, so the limit cannot be used to smuggle attachments past the filter.
 const maxMultipartDepth = 5
 
+// whitespaceStripper wraps an io.Reader and strips CR, LF, space, and tab
+// characters from the stream, so base64 decoding also works for parts whose
+// lines contain whitespace the standard decoder would choke on.
+type whitespaceStripper struct {
+	r io.Reader
+}
+
+func (w *whitespaceStripper) Read(p []byte) (int, error) {
+	for {
+		n, err := w.r.Read(p)
+		j := 0
+		for i := 0; i < n; i++ {
+			if p[i] != '\r' && p[i] != '\n' && p[i] != ' ' && p[i] != '\t' {
+				p[j] = p[i]
+				j++
+			}
+		}
+		if j > 0 || err != nil {
+			return j, err
+		}
+	}
+}
+
 func CheckMail(rawMail string, allowed map[string]bool, headerInspectSize int) string {
 	if strings.TrimSpace(rawMail) == "" {
 		return "Empty mail"
@@ -99,7 +122,7 @@ func checkEntity(contentType string, body io.Reader, allowed map[string]bool, he
 		var reader io.Reader = part
 		switch encoding {
 		case "base64":
-			reader = base64.NewDecoder(base64.StdEncoding, part)
+			reader = base64.NewDecoder(base64.StdEncoding, &whitespaceStripper{r: part})
 		case "quoted-printable":
 			reader = quotedprintable.NewReader(part)
 		}
