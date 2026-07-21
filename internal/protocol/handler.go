@@ -12,52 +12,52 @@ import (
 
 
 type ProtocolHandler struct {
-	SessionManager *session.Manager
-	AllowedMime    map[string]bool
-	HeaderSize     int
-	Writer         *bufio.Writer
-	CheckFunc      func([]string, map[string]bool, int) string
+	SessionManager  *session.Manager
+	AllowedMime     map[string]bool
+	HeaderSize      int
+	MaxInspectBytes int
+	Writer          *bufio.Writer
+	CheckFunc       func(string, map[string]bool, int) string
 }
 
-func NewProtocolHandler(sessMgr *session.Manager, allowed map[string]bool, headerSize int, w *bufio.Writer) *ProtocolHandler {
+func NewProtocolHandler(sessMgr *session.Manager, allowed map[string]bool, headerSize, maxInspectBytes int, w *bufio.Writer) *ProtocolHandler {
 	return &ProtocolHandler{
-		SessionManager: sessMgr,
-		AllowedMime:    allowed,
-		HeaderSize:     headerSize,
-		Writer:         w,
-		CheckFunc:      mail.CheckMailPart,
+		SessionManager:  sessMgr,
+		AllowedMime:     allowed,
+		HeaderSize:      headerSize,
+		MaxInspectBytes: maxInspectBytes,
+		Writer:          w,
+		CheckFunc:       mail.CheckMail,
 	}
 }
 
 func (p *ProtocolHandler) HandleDataLine(sid, token, line string) {
 	s := p.SessionManager.GetOrCreate(sid)
-	// Store the unescaped form for analysis, but echo the line back
-	// unchanged so the dot-escaping of the filter protocol is preserved.
-	stored := line
-	if line != "." && strings.HasPrefix(line, "..") {
-		stored = line[1:]
+	// Buffer the unescaped form for analysis (the terminating dot is not
+	// part of the message), but echo the line back unchanged so the
+	// dot-escaping of the filter protocol is preserved.
+	if line != "." {
+		stored := line
+		if strings.HasPrefix(line, "..") {
+			stored = line[1:]
+		}
+		if p.MaxInspectBytes > 0 && s.Data.Len()+len(stored)+1 > p.MaxInspectBytes {
+			s.Truncated = true
+		} else {
+			s.Data.WriteString(stored)
+			s.Data.WriteByte('\n')
+		}
 	}
-	s.Message = append(s.Message, stored)
 	p.produceOutput("filter-dataline", sid, token, "%s", line)
 }
 
 func (p *ProtocolHandler) HandleCommit(sid, token string) {
 	s := p.SessionManager.GetOrCreate(sid)
-	hasHeader := false
-	for _, l := range s.Message {
-		if strings.Contains(l, ":") {
-			hasHeader = true
-			break
-		}
+	if s.Truncated {
+		logging.Warn("[%s] Message exceeds max_inspect_bytes, only the first %d bytes were inspected.", sid, p.MaxInspectBytes)
 	}
 
-	if !hasHeader {
-		p.produceOutput("filter-result", sid, token, "reject|550 Policy violation: No valid headers")
-		p.SessionManager.Delete(sid)
-		return
-	}
-
-	reason := p.CheckFunc(s.Message, p.AllowedMime, p.HeaderSize)
+	reason := p.CheckFunc(s.Data.String(), p.AllowedMime, p.HeaderSize)
 	if reason == "" {
 		p.produceOutput("filter-result", sid, token, "proceed")
 	} else {

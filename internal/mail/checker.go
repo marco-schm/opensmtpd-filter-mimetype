@@ -18,8 +18,7 @@ import (
 // skipped, so the limit cannot be used to smuggle attachments past the filter.
 const maxMultipartDepth = 5
 
-func CheckMailPart(lines []string, allowed map[string]bool, headerInspectSize int) string {
-	rawMail := strings.Join(lines, "\n")
+func CheckMail(rawMail string, allowed map[string]bool, headerInspectSize int) string {
 	if strings.TrimSpace(rawMail) == "" {
 		return "Empty mail"
 	}
@@ -58,8 +57,12 @@ func checkEntity(contentType string, body io.Reader, allowed map[string]bool, he
 		head := make([]byte, headerInspectSize)
 		n, _ := io.ReadFull(body, head)
 		detectedMime := http.DetectContentType(head[:n])
-		if !allowed[strings.ToLower(detectedMime)] && !strings.HasPrefix(detectedMime, "text/") {
-			return "Forbidden MIME type: " + CleanString(detectedMime)
+		realMime, _, _ := mime.ParseMediaType(detectedMime)
+		if realMime == "" {
+			realMime = detectedMime
+		}
+		if !allowed[strings.ToLower(realMime)] && !strings.HasPrefix(realMime, "text/") {
+			return "Forbidden MIME type: " + CleanString(realMime)
 		}
 		return ""
 	}

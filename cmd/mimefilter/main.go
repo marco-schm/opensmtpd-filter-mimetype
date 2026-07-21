@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -12,10 +13,13 @@ import (
 	"github.com/marco-schm/opensmtpd-filter-mimetype/internal/session"
 )
 
-const ConfigPath = "/etc/opensmtpd-filter-mimetype.yaml"
+const DefaultConfigPath = "/etc/opensmtpd-filter-mimetype.yaml"
 
 func main() {
-	cfg, allowedMime, logLevel, err := config.LoadConfig(ConfigPath)
+	configPath := flag.String("config", DefaultConfigPath, "Path to the YAML configuration file")
+	flag.Parse()
+
+	cfg, allowedMime, logLevel, err := config.LoadConfig(*configPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "CRITICAL: Failed to load config: %v\n", err)
 		os.Exit(1)
@@ -27,26 +31,52 @@ func main() {
 	writer := bufio.NewWriter(os.Stdout)
 
 	manager := session.NewManager()
-	handler := protocol.NewProtocolHandler(manager, allowedMime, cfg.HeaderInspectSize, writer)
+	handler := protocol.NewProtocolHandler(manager, allowedMime, cfg.HeaderInspectSize, cfg.MaxInspectBytes, writer)
 
 	scanner := bufio.NewScanner(os.Stdin)
 	bufferBytes := cfg.ScannerBufferMB * 1024 * 1024
 	buf := make([]byte, 0, bufferBytes)
 	scanner.Buffer(buf, bufferBytes)
 
-	fmt.Fprintln(writer, "register|filter|smtp-in|data-line")
-	fmt.Fprintln(writer, "register|filter|smtp-in|commit")
-	fmt.Fprintln(writer, "register|report|smtp-in|link-disconnect")
-	fmt.Fprintln(writer, "register|report|smtp-in|tx-reset")
-	fmt.Fprintln(writer, "register|ready")
-	if err := writer.Flush(); err != nil {
-		fmt.Fprintf(os.Stderr, "CRITICAL: Failed to write registration: %v\n", err)
-		os.Exit(1)
+	register := func() {
+		fmt.Fprintln(writer, "register|filter|smtp-in|data-line")
+		fmt.Fprintln(writer, "register|filter|smtp-in|commit")
+		fmt.Fprintln(writer, "register|report|smtp-in|link-disconnect")
+		fmt.Fprintln(writer, "register|report|smtp-in|tx-reset")
+		fmt.Fprintln(writer, "register|ready")
+		if err := writer.Flush(); err != nil {
+			fmt.Fprintf(os.Stderr, "CRITICAL: Failed to write registration: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
+	registered := false
 	for scanner.Scan() {
 		line := scanner.Text()
 		logging.Debug("RAW LINE: %s", line)
+
+		// smtpd starts with a config handshake ending in "config|ready";
+		// registrations must only be sent after that.
+		if !registered {
+			if strings.HasPrefix(line, "config|") {
+				kv := strings.SplitN(line, "|", 3)
+				key := safe(kv, 1)
+				if key == "ready" {
+					register()
+					registered = true
+				} else if key == "smtpd-version" {
+					logging.Info("Connected to smtpd version %s", safe(kv, 2))
+				} else {
+					logging.Debug("smtpd config: %s=%s", key, safe(kv, 2))
+				}
+				continue
+			}
+			// No handshake seen — register anyway so we don't deadlock,
+			// then process the line normally.
+			logging.Warn("No config handshake received, registering immediately.")
+			register()
+			registered = true
+		}
 
 		parts := strings.SplitN(line, "|", 8)
 		if len(parts) < 3 {

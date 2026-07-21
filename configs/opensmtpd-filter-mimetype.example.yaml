@@ -5,7 +5,7 @@
 log_tag: "mime-filter"
 log_level: "info"   # debug / info / warn / error
 scanner_buffer_max_mb: 20   # Maximum stdin buffer size for SMTP streaming
-max_inspect_bytes: 100000    # Maximum bytes to inspect per attachment (deep scan limit)
+max_inspect_bytes: 52428800  # Max message bytes buffered for inspection (50 MB); larger mails are only partially scanned. 0 = unlimited
 header_inspect_size: 512     # Bytes used for magic-byte/MIME header detection
 allowed_mime_types:
 

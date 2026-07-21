@@ -11,8 +11,8 @@ import (
 )
 
 func newTestHandler(buf *bytes.Buffer) *ProtocolHandler {
-	h := NewProtocolHandler(session.NewManager(), map[string]bool{}, 512, bufio.NewWriter(buf))
-	h.CheckFunc = func([]string, map[string]bool, int) string { return "" }
+	h := NewProtocolHandler(session.NewManager(), map[string]bool{}, 512, 0, bufio.NewWriter(buf))
+	h.CheckFunc = func(string, map[string]bool, int) string { return "" }
 	return h
 }
 
@@ -60,11 +60,30 @@ func TestDataLineDotEscaping(t *testing.T) {
 	}
 
 	s := h.SessionManager.GetOrCreate("s1")
-	if s.Message[0] != ".starts with dot" {
-		t.Errorf("stored line not unescaped: got %q", s.Message[0])
+	if s.Data.String() != ".starts with dot\nnormal line\n" {
+		t.Errorf("unexpected buffered data (must be unescaped, without terminating dot): %q", s.Data.String())
 	}
-	if s.Message[1] != "normal line" || s.Message[2] != "." {
-		t.Errorf("unexpected stored lines: %q", s.Message[1:])
+}
+
+// Lines beyond max_inspect_bytes are no longer buffered but must still be echoed.
+func TestMaxInspectBytesCapsBufferButNotEcho(t *testing.T) {
+	var buf bytes.Buffer
+	h := NewProtocolHandler(session.NewManager(), map[string]bool{}, 512, 50, bufio.NewWriter(&buf))
+	h.CheckFunc = func(string, map[string]bool, int) string { return "" }
+
+	for i := 0; i < 20; i++ {
+		h.HandleDataLine("s1", "tok", "0123456789") // 11 bytes buffered per line
+	}
+
+	s := h.SessionManager.GetOrCreate("s1")
+	if s.Data.Len() > 50 {
+		t.Errorf("buffer exceeds max_inspect_bytes: %d bytes", s.Data.Len())
+	}
+	if !s.Truncated {
+		t.Error("Truncated flag not set")
+	}
+	if got := strings.Count(buf.String(), "\n"); got != 20 {
+		t.Errorf("expected all 20 lines echoed, got %d", got)
 	}
 }
 
@@ -79,8 +98,8 @@ func TestTxResetClearsBufferedMessage(t *testing.T) {
 
 	h.HandleDataLine("s1", "tok2", "Subject: second mail")
 	s := h.SessionManager.GetOrCreate("s1")
-	if len(s.Message) != 1 || s.Message[0] != "Subject: second mail" {
-		t.Fatalf("stale data survived tx-reset: %q", s.Message)
+	if s.Data.String() != "Subject: second mail\n" {
+		t.Fatalf("stale data survived tx-reset: %q", s.Data.String())
 	}
 }
 

@@ -6,14 +6,17 @@ all: build
 build:
 	@echo "Building $(BINARY_NAME)..."
 	mkdir -p $(BUILD_DIR)
-	go build -o $(BUILD_DIR)/$(BINARY_NAME) cmd/mimefilter/main.go
+	go build -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/mimefilter
 
 clean:
 	@echo "Cleaning..."
 	rm -rf $(BUILD_DIR)
 
 run:
-	go run cmd/mimefilter/main.go
+	go run ./cmd/mimefilter
+
+test:
+	go test ./...
 
 fmt:
 	go fmt ./...

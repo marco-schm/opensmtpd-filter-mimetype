@@ -1,10 +1,16 @@
 package session
 
-import "sync"
+import (
+	"bytes"
+	"sync"
+)
 
 type Session struct {
-	ID      string
-	Message []string
+	ID   string
+	Data bytes.Buffer
+	// Truncated is set when the message exceeded max_inspect_bytes and
+	// only a prefix of it is buffered for inspection.
+	Truncated bool
 }
 
 type Manager struct {
@@ -22,7 +28,7 @@ func (m *Manager) GetOrCreate(id string) *Session {
 	if s, ok := m.sessions[id]; ok {
 		return s
 	}
-	s := &Session{ID: id, Message: []string{}}
+	s := &Session{ID: id}
 	m.sessions[id] = s
 	return s
 }

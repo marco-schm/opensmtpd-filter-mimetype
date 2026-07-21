@@ -19,7 +19,7 @@ func check(t *testing.T, rawMail string) string {
 	t.Helper()
 	done := make(chan string, 1)
 	go func() {
-		done <- CheckMailPart(strings.Split(rawMail, "\n"), testAllowed, 512)
+		done <- CheckMail(rawMail, testAllowed, 512)
 	}()
 	select {
 	case reason := <-done:
