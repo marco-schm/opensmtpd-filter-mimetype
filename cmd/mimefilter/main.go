@@ -37,6 +37,7 @@ func main() {
 	fmt.Fprintln(writer, "register|filter|smtp-in|data-line")
 	fmt.Fprintln(writer, "register|filter|smtp-in|commit")
 	fmt.Fprintln(writer, "register|report|smtp-in|link-disconnect")
+	fmt.Fprintln(writer, "register|report|smtp-in|tx-reset")
 	fmt.Fprintln(writer, "register|ready")
 	if err := writer.Flush(); err != nil {
 		fmt.Fprintf(os.Stderr, "CRITICAL: Failed to write registration: %v\n", err)
@@ -69,6 +70,8 @@ func main() {
 			case "report":
 				if phase == "link-disconnect" {
 					handler.HandleDisconnect(sid)
+				} else if phase == "tx-reset" {
+					handler.HandleTxReset(sid)
 				}
 			case "filter":
 				if phase == "data-line" {

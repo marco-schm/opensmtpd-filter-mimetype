@@ -67,6 +67,14 @@ func (p *ProtocolHandler) HandleCommit(sid, token string) {
 	p.SessionManager.Delete(sid)
 }
 
+// HandleTxReset drops any buffered message data when a transaction ends
+// (RSET, rollback or after commit), so a follow-up mail in the same
+// connection is not analyzed together with leftovers of the previous one.
+func (p *ProtocolHandler) HandleTxReset(sid string) {
+	p.SessionManager.Delete(sid)
+	logging.Debug("[%s] Transaction reset, message buffer cleared.", sid)
+}
+
 func (p *ProtocolHandler) HandleDisconnect(sid string) {
 	p.SessionManager.Delete(sid)
 	logging.Debug("[%s] Session cleaned up.", sid)

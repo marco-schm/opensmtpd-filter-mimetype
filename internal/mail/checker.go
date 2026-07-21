@@ -13,6 +13,11 @@ import (
 	"github.com/marco-schm/opensmtpd-filter-mimetype/internal/logging"
 )
 
+// maxMultipartDepth bounds recursion into nested multipart containers and
+// attached rfc822 messages. Anything nested deeper is rejected rather than
+// skipped, so the limit cannot be used to smuggle attachments past the filter.
+const maxMultipartDepth = 5
+
 func CheckMailPart(lines []string, allowed map[string]bool, headerInspectSize int) string {
 	rawMail := strings.Join(lines, "\n")
 	if strings.TrimSpace(rawMail) == "" {
@@ -25,15 +30,33 @@ func CheckMailPart(lines []string, allowed map[string]bool, headerInspectSize in
 		return "Malformed mail headers"
 	}
 
-	mediaType, params, err := mime.ParseMediaType(msg.Header.Get("Content-Type"))
+	return checkEntity(msg.Header.Get("Content-Type"), msg.Body, allowed, headerInspectSize, 0)
+}
+
+// checkEntity inspects a single MIME entity and recurses into nested
+// multipart containers and attached rfc822 messages.
+func checkEntity(contentType string, body io.Reader, allowed map[string]bool, headerInspectSize, depth int) string {
+	mediaType, params, err := mime.ParseMediaType(contentType)
 	if err != nil || mediaType == "" {
 		logging.Debug("Content-Type not found or parse error: %v", err)
 		mediaType = "text/plain"
 	}
 
+	if mediaType == "message/rfc822" {
+		if depth >= maxMultipartDepth {
+			return "Multipart nesting too deep"
+		}
+		inner, err := mail.ReadMessage(body)
+		if err != nil {
+			logging.Debug("Failed to parse attached message: %v", err)
+			return "Malformed attached message"
+		}
+		return checkEntity(inner.Header.Get("Content-Type"), inner.Body, allowed, headerInspectSize, depth+1)
+	}
+
 	if !strings.HasPrefix(mediaType, "multipart/") {
 		head := make([]byte, headerInspectSize)
-		n, _ := msg.Body.Read(head)
+		n, _ := io.ReadFull(body, head)
 		detectedMime := http.DetectContentType(head[:n])
 		if !allowed[strings.ToLower(detectedMime)] && !strings.HasPrefix(detectedMime, "text/") {
 			return "Forbidden MIME type: " + CleanString(detectedMime)
@@ -41,7 +64,15 @@ func CheckMailPart(lines []string, allowed map[string]bool, headerInspectSize in
 		return ""
 	}
 
-	mr := multipart.NewReader(msg.Body, params["boundary"])
+	if depth >= maxMultipartDepth {
+		return "Multipart nesting too deep"
+	}
+	boundary := params["boundary"]
+	if boundary == "" {
+		return "Malformed multipart message: missing boundary"
+	}
+
+	mr := multipart.NewReader(body, boundary)
 	decoder := new(mime.WordDecoder)
 
 	for {
@@ -50,8 +81,10 @@ func CheckMailPart(lines []string, allowed map[string]bool, headerInspectSize in
 			break
 		}
 		if err != nil {
-			logging.Debug("Skipping malformed part: %v", err)
-			continue
+			// NextPart can return the same non-EOF error on every call
+			// (e.g. truncated input) — retrying would spin forever.
+			logging.Debug("Stopping multipart scan on error: %v", err)
+			break
 		}
 
 		filename := part.FileName()
@@ -66,6 +99,14 @@ func CheckMailPart(lines []string, allowed map[string]bool, headerInspectSize in
 			reader = base64.NewDecoder(base64.StdEncoding, part)
 		case "quoted-printable":
 			reader = quotedprintable.NewReader(part)
+		}
+
+		partType, _, _ := mime.ParseMediaType(part.Header.Get("Content-Type"))
+		if strings.HasPrefix(partType, "multipart/") || partType == "message/rfc822" {
+			if reason := checkEntity(part.Header.Get("Content-Type"), reader, allowed, headerInspectSize, depth+1); reason != "" {
+				return reason
+			}
+			continue
 		}
 
 		head := make([]byte, headerInspectSize)

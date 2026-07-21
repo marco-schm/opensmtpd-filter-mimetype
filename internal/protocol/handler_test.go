@@ -68,6 +68,22 @@ func TestDataLineDotEscaping(t *testing.T) {
 	}
 }
 
+// After a tx-reset (RSET/rollback), a second mail in the same connection
+// must not see leftover lines of the aborted transaction.
+func TestTxResetClearsBufferedMessage(t *testing.T) {
+	var buf bytes.Buffer
+	h := newTestHandler(&buf)
+
+	h.HandleDataLine("s1", "tok", "Subject: aborted mail")
+	h.HandleTxReset("s1")
+
+	h.HandleDataLine("s1", "tok2", "Subject: second mail")
+	s := h.SessionManager.GetOrCreate("s1")
+	if len(s.Message) != 1 || s.Message[0] != "Subject: second mail" {
+		t.Fatalf("stale data survived tx-reset: %q", s.Message)
+	}
+}
+
 func TestCommitProducesResultAfterAllDataLines(t *testing.T) {
 	var buf bytes.Buffer
 	h := newTestHandler(&buf)
