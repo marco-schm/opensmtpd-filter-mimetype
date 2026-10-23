@@ -124,3 +124,23 @@ func TestCommitProducesResultAfterAllDataLines(t *testing.T) {
 		}
 	}
 }
+
+// A message larger than max_inspect_bytes was only partially buffered, so it
+// must be rejected instead of passing with an uninspected tail.
+func TestTruncatedMessageRejectedOnCommit(t *testing.T) {
+	var buf bytes.Buffer
+	h := NewProtocolHandler(session.NewManager(), map[string]bool{}, 512, 50, bufio.NewWriter(&buf))
+	h.CheckFunc = func(string, map[string]bool, int) string { return "" }
+
+	for i := 0; i < 20; i++ {
+		h.HandleDataLine("s1", "tok", "0123456789")
+	}
+	h.HandleDataLine("s1", "tok", ".")
+	h.HandleCommit("s1", "tok")
+
+	lines := strings.Split(strings.TrimRight(buf.String(), "\n"), "\n")
+	last := lines[len(lines)-1]
+	if !strings.HasPrefix(last, "filter-result|s1|tok|reject|550 ") {
+		t.Fatalf("truncated message not rejected, got %q", last)
+	}
+}

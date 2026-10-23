@@ -10,7 +10,6 @@ import (
 	"github.com/marco-schm/opensmtpd-filter-mimetype/internal/session"
 )
 
-
 type ProtocolHandler struct {
 	SessionManager  *session.Manager
 	AllowedMime     map[string]bool
@@ -53,11 +52,15 @@ func (p *ProtocolHandler) HandleDataLine(sid, token, line string) {
 
 func (p *ProtocolHandler) HandleCommit(sid, token string) {
 	s := p.SessionManager.GetOrCreate(sid)
+	var reason string
 	if s.Truncated {
-		logging.Warn("[%s] Message exceeds max_inspect_bytes, only the first %d bytes were inspected.", sid, p.MaxInspectBytes)
+		// The tail of the message was never buffered, so it cannot be
+		// inspected: reject instead of letting it through unchecked.
+		logging.Warn("[%s] Message exceeds max_inspect_bytes (%d), rejected.", sid, p.MaxInspectBytes)
+		reason = "Message too large for inspection"
+	} else {
+		reason = p.CheckFunc(s.Data.String(), p.AllowedMime, p.HeaderSize)
 	}
-
-	reason := p.CheckFunc(s.Data.String(), p.AllowedMime, p.HeaderSize)
 	if reason == "" {
 		p.produceOutput("filter-result", sid, token, "proceed")
 	} else {
