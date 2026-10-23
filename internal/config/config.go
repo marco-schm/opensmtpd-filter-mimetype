@@ -14,6 +14,8 @@ type AppConfig struct {
 	AllowedMimeTypes  []string `yaml:"allowed_mime_types"`
 	MaxInspectBytes   int      `yaml:"max_inspect_bytes"`
 	HeaderInspectSize int      `yaml:"header_inspect_size"`
+	// BlockedExtensions overrides the built-in extension blocklist.
+	BlockedExtensions []string `yaml:"blocked_extensions"`
 }
 
 func LoadConfig(path string) (AppConfig, map[string]bool, int, error) {

@@ -9,6 +9,7 @@ import (
 
 	"github.com/marco-schm/opensmtpd-filter-mimetype/internal/config"
 	"github.com/marco-schm/opensmtpd-filter-mimetype/internal/logging"
+	"github.com/marco-schm/opensmtpd-filter-mimetype/internal/mail"
 	"github.com/marco-schm/opensmtpd-filter-mimetype/internal/protocol"
 	"github.com/marco-schm/opensmtpd-filter-mimetype/internal/session"
 )
@@ -26,6 +27,7 @@ func main() {
 	}
 
 	logging.SetLevel(logLevel)
+	mail.SetBlockedExtensions(cfg.BlockedExtensions)
 	logging.Info("Filter started. Tag: %s Level: %s Buffer=%dMB", cfg.LogTag, cfg.LogLevel, cfg.ScannerBufferMB)
 
 	writer := bufio.NewWriter(os.Stdout)
