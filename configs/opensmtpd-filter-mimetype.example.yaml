@@ -5,8 +5,18 @@
 log_tag: "mime-filter"
 log_level: "info"   # debug / info / warn / error
 scanner_buffer_max_mb: 20   # Maximum stdin buffer size for SMTP streaming
-max_inspect_bytes: 52428800  # Max message bytes buffered for inspection (50 MB); larger mails are only partially scanned. 0 = unlimited
+max_inspect_bytes: 52428800  # Max message bytes buffered for inspection (50 MB); larger mails are rejected. 0 = unlimited
 header_inspect_size: 512     # Bytes used for magic-byte/MIME header detection
+
+# Optional: replace the built-in list of blocked file extensions (exe, js, vbs,
+# bat, ps1, hta, lnk, iso, docm, xlsm, html, ...). These are rejected regardless
+# of content, also inside ZIP, tar.gz and gzip attachments.
+# blocked_extensions: [exe, js, vbs]
+
+# The allowlist is matched against the *detected* content type (Go's
+# http.DetectContentType), not the declared one. ZIP-based formats such as
+# .docx/.xlsx/.odt are detected as application/zip and their entries are
+# inspected (macros, blocked extensions, nested archives).
 allowed_mime_types:
 
   # --- Cryptography & Keys (PGP, GPG, Certificates) ---
@@ -77,6 +87,7 @@ allowed_mime_types:
   - application/zip
   - application/x-zip-compressed
   - application/gzip
+  - application/x-gzip   # detected type of .gz (e.g. DMARC / TLS-RPT reports)
   - application/x-tar
   - application/x-bzip2
   - application/x-7z-compressed
@@ -90,6 +101,7 @@ allowed_mime_types:
   # --- Audio/Video ---
   - audio/mpeg
   - audio/wav
+  - audio/wave           # detected type of .wav
   - audio/ogg
   - video/mp4
   - video/mpeg
