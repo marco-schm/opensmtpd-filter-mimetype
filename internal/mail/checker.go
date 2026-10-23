@@ -1,8 +1,10 @@
 package mail
 
 import (
+	"archive/tar"
 	"archive/zip"
 	"bytes"
+	"compress/gzip"
 	"encoding/base64"
 	"io"
 	"mime"
@@ -199,6 +201,12 @@ func checkLeaf(get headerGetter, ctParams map[string]string, body io.Reader, all
 	head = head[:n]
 	realMime := sniff(head)
 
+	// S/MIME (PKCS #7) is DER encoded and sniffs as octet-stream. Accept it
+	// only if the content really is a PKCS #7 structure.
+	if realMime == "application/octet-stream" && isPKCS7(head) && allowedAny(allowed, pkcs7Types...) {
+		return ""
+	}
+
 	// Inline text bodies (plain/html alternatives) are always acceptable.
 	if filename == "" && strings.HasPrefix(realMime, "text/") {
 		return ""
@@ -217,6 +225,99 @@ func checkLeaf(get headerGetter, ctParams map[string]string, body io.Reader, all
 		if reason := checkZip(data, 0); reason != "" {
 			return reason + " (File: " + CleanString(filename) + ")"
 		}
+	}
+	if realMime == "application/x-gzip" {
+		data, err := io.ReadAll(io.MultiReader(bytes.NewReader(head), body))
+		if err != nil {
+			return "Unreadable attachment (File: " + CleanString(filename) + ")"
+		}
+		if reason := checkGzip(data, filename); reason != "" {
+			return reason + " (File: " + CleanString(filename) + ")"
+		}
+	}
+	return ""
+}
+
+var pkcs7Types = []string{
+	"application/pkcs7-mime", "application/pkcs7-signature",
+	"application/x-pkcs7-mime", "application/x-pkcs7-signature",
+}
+
+// oidPKCS7 is the DER encoding of OID 1.2.840.113549.1.7 (PKCS #7 content).
+var oidPKCS7 = []byte{0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x07}
+
+func isPKCS7(head []byte) bool {
+	if len(head) < 16 || head[0] != 0x30 {
+		return false
+	}
+	end := len(head)
+	if end > 32 {
+		end = 32
+	}
+	return bytes.Contains(head[:end], oidPKCS7)
+}
+
+func allowedAny(allowed map[string]bool, types ...string) bool {
+	for _, t := range types {
+		if allowed[t] {
+			return true
+		}
+	}
+	return false
+}
+
+// checkGzip inspects a gzip attachment (e.g. DMARC or TLS-RPT reports): the
+// names of the compressed file, tar entries and nested ZIP archives are
+// checked, and executables are rejected.
+func checkGzip(data []byte, filename string) string {
+	zr, err := gzip.NewReader(bytes.NewReader(data))
+	if err != nil {
+		return "Unreadable gzip archive"
+	}
+	defer zr.Close()
+	zr.Multistream(false)
+
+	lower := strings.ToLower(strings.TrimSpace(filename))
+	innerNames := []string{zr.Name, strings.TrimSuffix(lower, ".gz")}
+	for _, n := range innerNames {
+		if ext := blockedExtension(n); ext != "" {
+			return "Forbidden file in archive: " + CleanString(n)
+		}
+	}
+
+	inner, err := io.ReadAll(io.LimitReader(zr, maxNestedArchiveBytes+1))
+	if err != nil {
+		return "Unreadable gzip archive"
+	}
+	if len(inner) > maxNestedArchiveBytes {
+		return "Compressed content too large to inspect"
+	}
+
+	switch {
+	case len(inner) > 262 && string(inner[257:262]) == "ustar":
+		tr := tar.NewReader(bytes.NewReader(inner))
+		for i := 0; ; i++ {
+			h, err := tr.Next()
+			if err == io.EOF {
+				return ""
+			}
+			if err != nil {
+				return "Unreadable tar archive"
+			}
+			if i >= maxArchiveEntries {
+				return "Archive has too many entries"
+			}
+			if ext := blockedExtension(h.Name); ext != "" {
+				return "Forbidden file in archive: " + CleanString(h.Name)
+			}
+			if strings.HasSuffix(strings.ToLower(h.Name), ".zip") {
+				return "Nested archive in tar: " + CleanString(h.Name)
+			}
+		}
+	case sniff(inner) == "application/zip":
+		return checkZip(inner, 1)
+	case bytes.HasPrefix(inner, []byte("MZ")) || bytes.HasPrefix(inner, []byte("\x7fELF")):
+		return "Executable in gzip archive"
 	}
 	return ""
 }

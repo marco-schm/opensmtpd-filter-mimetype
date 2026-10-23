@@ -1,8 +1,10 @@
 package mail
 
 import (
+	"archive/tar"
 	"archive/zip"
 	"bytes"
+	"compress/gzip"
 	"encoding/base64"
 	"strings"
 	"testing"
@@ -150,5 +152,71 @@ func TestCleanAttachmentsAllowed(t *testing.T) {
 		if r := checkWith(t, prodAllowed, raw); r != "" {
 			t.Errorf("%s: legitimate mail rejected: %q", name, r)
 		}
+	}
+}
+
+func gz(t *testing.T, name string, data []byte) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	w := gzip.NewWriter(&buf)
+	w.Name = name
+	w.Write(data)
+	w.Close()
+	return buf.Bytes()
+}
+
+var reportAllowed = map[string]bool{
+	"application/zip":             true,
+	"application/x-gzip":          true,
+	"application/pkcs7-signature": true,
+	"text/plain":                  true,
+}
+
+// DMARC aggregate (Microsoft) and TLS-RPT reports arrive gzip compressed.
+func TestGzipReportAllowed(t *testing.T) {
+	data := gz(t, "enterprise.protection.outlook.com!sayanetworks.eu!1761177600!1761264000.xml", []byte("<?xml version=\"1.0\"?><feedback/>"))
+	raw := attachmentMail("application/gzip", "enterprise.protection.outlook.com!sayanetworks.eu!1761177600!1761264000.xml.gz", data)
+	if r := checkWith(t, reportAllowed, raw); r != "" {
+		t.Fatalf("DMARC gzip report rejected: %q", r)
+	}
+}
+
+func TestGzipExecutableRejected(t *testing.T) {
+	for _, name := range []string{"invoice.exe.gz", "invoice.gz"} {
+		data := gz(t, "", exeBytes)
+		if r := checkWith(t, reportAllowed, attachmentMail("application/gzip", name, data)); r == "" {
+			t.Errorf("gzip with executable %q accepted", name)
+		}
+	}
+}
+
+func TestTarGzWithScriptRejected(t *testing.T) {
+	var tb bytes.Buffer
+	tw := tar.NewWriter(&tb)
+	body := []byte("WScript.Echo(1)")
+	tw.WriteHeader(&tar.Header{Name: "docs/run.js", Mode: 0644, Size: int64(len(body))})
+	tw.Write(body)
+	tw.Close()
+	if r := checkWith(t, reportAllowed, attachmentMail("application/gzip", "docs.tar.gz", gz(t, "docs.tar", tb.Bytes()))); r == "" {
+		t.Fatal("tar.gz with .js accepted")
+	}
+}
+
+// S/MIME signatures are DER (PKCS #7) and must pass when allowed.
+func TestSMIMESignatureAllowed(t *testing.T) {
+	sig := append([]byte{0x30, 0x82, 0x05, 0x10, 0x06, 0x09, 0x2a, 0x86, 0x48, 0x86, 0xf7, 0x0d, 0x01, 0x07, 0x02, 0xa0}, bytes.Repeat([]byte{0x01}, 64)...)
+	raw := "From: a@example.com\n" +
+		"Content-Type: multipart/signed; protocol=\"application/pkcs7-signature\"; micalg=sha-256; boundary=\"S\"\n\n" +
+		"--S\nContent-Type: text/plain\n\nsigned text\n" +
+		"--S\nContent-Type: application/pkcs7-signature; name=\"smime.p7s\"\n" +
+		"Content-Disposition: attachment; filename=\"smime.p7s\"\n" +
+		"Content-Transfer-Encoding: base64\n\n" + b64(sig) + "--S--\n"
+	if r := checkWith(t, reportAllowed, raw); r != "" {
+		t.Fatalf("S/MIME signed mail rejected: %q", r)
+	}
+	// An executable declared as a signature must still be rejected.
+	fake := strings.Replace(raw, b64(sig), b64(exeBytes), 1)
+	if r := checkWith(t, reportAllowed, fake); r == "" {
+		t.Fatal("executable disguised as smime.p7s accepted")
 	}
 }
