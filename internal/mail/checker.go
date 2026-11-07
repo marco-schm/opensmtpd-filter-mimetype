@@ -104,7 +104,7 @@ func CheckMail(rawMail string, allowed map[string]bool, headerInspectSize int) s
 
 	msg, err := mail.ReadMessage(strings.NewReader(rawMail))
 	if err != nil {
-		logging.Debug("Failed to parse mail headers: %v", err)
+		logging.Debug("Failed to parse mail headers")
 		return "Malformed mail headers"
 	}
 
@@ -119,7 +119,7 @@ func checkEntity(get headerGetter, body io.Reader, allowed map[string]bool, head
 	if ct := strings.TrimSpace(get("Content-Type")); ct != "" {
 		mt, p, err := mime.ParseMediaType(ct)
 		if err != nil || mt == "" {
-			logging.Debug("Unparsable Content-Type %q: %v", ct, err)
+			logging.Debug("Unparsable Content-Type header")
 			return "Malformed Content-Type header"
 		}
 		mediaType, params = mt, p
@@ -137,7 +137,7 @@ func checkEntity(get headerGetter, body io.Reader, allowed map[string]bool, head
 		}
 		inner, err := mail.ReadMessage(decoded)
 		if err != nil {
-			logging.Debug("Failed to parse attached message: %v", err)
+			logging.Debug("Failed to parse attached message")
 			return "Malformed attached message"
 		}
 		return checkEntity(inner.Header.Get, inner.Body, allowed, headerInspectSize, depth+1)
@@ -161,7 +161,7 @@ func checkEntity(get headerGetter, body io.Reader, allowed map[string]bool, head
 			if err != nil {
 				// Never retry (NextPart can return the same error forever)
 				// and never skip: the rest of the message is uninspected.
-				logging.Debug("Multipart parse error: %v", err)
+				logging.Debug("Multipart parse error")
 				return "Malformed multipart message"
 			}
 			if reason := checkEntity(part.Header.Get, part, allowed, headerInspectSize, depth+1); reason != "" {
@@ -183,7 +183,7 @@ func decodeTransfer(cte string, r io.Reader) (io.Reader, string) {
 	case "quoted-printable":
 		return quotedprintable.NewReader(r), ""
 	default:
-		return nil, "Unsupported Content-Transfer-Encoding: " + CleanString(v)
+		return nil, "Unsupported Content-Transfer-Encoding"
 	}
 }
 
@@ -193,7 +193,7 @@ func checkLeaf(get headerGetter, ctParams map[string]string, body io.Reader, all
 		return reason
 	}
 	if ext := blockedExtension(filename); ext != "" {
-		return "Forbidden file extension ." + CleanString(ext) + " (File: " + CleanString(filename) + ")"
+		return "Forbidden file extension ." + CleanString(ext)
 	}
 
 	head := make([]byte, headerInspectSize)
@@ -212,27 +212,24 @@ func checkLeaf(get headerGetter, ctParams map[string]string, body io.Reader, all
 		return ""
 	}
 	if !allowed[realMime] {
-		if filename == "" {
-			return "Forbidden MIME type: " + CleanString(realMime)
-		}
-		return "Forbidden MIME type: " + CleanString(realMime) + " (File: " + CleanString(filename) + ")"
+		return "Forbidden MIME type: " + CleanString(realMime)
 	}
 	if realMime == "application/zip" {
 		data, err := io.ReadAll(io.MultiReader(bytes.NewReader(head), body))
 		if err != nil {
-			return "Unreadable attachment (File: " + CleanString(filename) + ")"
+			return "Unreadable attachment"
 		}
 		if reason := checkZip(data, 0); reason != "" {
-			return reason + " (File: " + CleanString(filename) + ")"
+			return reason
 		}
 	}
 	if realMime == "application/x-gzip" {
 		data, err := io.ReadAll(io.MultiReader(bytes.NewReader(head), body))
 		if err != nil {
-			return "Unreadable attachment (File: " + CleanString(filename) + ")"
+			return "Unreadable attachment"
 		}
 		if reason := checkGzip(data, filename); reason != "" {
-			return reason + " (File: " + CleanString(filename) + ")"
+			return reason
 		}
 	}
 	return ""
@@ -281,7 +278,7 @@ func checkGzip(data []byte, filename string) string {
 	innerNames := []string{zr.Name, strings.TrimSuffix(lower, ".gz")}
 	for _, n := range innerNames {
 		if ext := blockedExtension(n); ext != "" {
-			return "Forbidden file in archive: " + CleanString(n)
+			return "Forbidden file in archive"
 		}
 	}
 
@@ -308,10 +305,10 @@ func checkGzip(data []byte, filename string) string {
 				return "Archive has too many entries"
 			}
 			if ext := blockedExtension(h.Name); ext != "" {
-				return "Forbidden file in archive: " + CleanString(h.Name)
+				return "Forbidden file in archive"
 			}
 			if strings.HasSuffix(strings.ToLower(h.Name), ".zip") {
-				return "Nested archive in tar: " + CleanString(h.Name)
+				return "Nested archive in tar"
 			}
 		}
 	case sniff(inner) == "application/zip":
@@ -331,7 +328,7 @@ func attachmentName(get headerGetter, ctParams map[string]string) (string, strin
 	if cd := strings.TrimSpace(get("Content-Disposition")); cd != "" {
 		_, p, err := mime.ParseMediaType(cd)
 		if err != nil {
-			logging.Debug("Unparsable Content-Disposition %q: %v", cd, err)
+			logging.Debug("Unparsable Content-Disposition header")
 			return "", "Malformed Content-Disposition header"
 		}
 		name = p["filename"]
@@ -379,7 +376,7 @@ func checkZip(data []byte, depth int) string {
 	}
 	for _, f := range zr.File {
 		if ext := blockedExtension(f.Name); ext != "" {
-			return "Forbidden file in archive: " + CleanString(f.Name)
+			return "Forbidden file in archive"
 		}
 		base := strings.ToLower(path.Base(strings.ReplaceAll(f.Name, `\`, "/")))
 		if base == "vbaproject.bin" || base == "vbadata.xml" {
@@ -390,19 +387,19 @@ func checkZip(data []byte, depth int) string {
 				return "Archive nesting too deep"
 			}
 			if f.Flags&0x1 != 0 {
-				return "Encrypted nested archive: " + CleanString(f.Name)
+				return "Encrypted nested archive"
 			}
 			rc, err := f.Open()
 			if err != nil {
-				return "Unreadable nested archive: " + CleanString(f.Name)
+				return "Unreadable nested archive"
 			}
 			inner, err := io.ReadAll(io.LimitReader(rc, maxNestedArchiveBytes+1))
 			rc.Close()
 			if err != nil {
-				return "Unreadable nested archive: " + CleanString(f.Name)
+				return "Unreadable nested archive"
 			}
 			if len(inner) > maxNestedArchiveBytes {
-				return "Nested archive too large to inspect: " + CleanString(f.Name)
+				return "Nested archive too large to inspect"
 			}
 			if reason := checkZip(inner, depth+1); reason != "" {
 				return reason

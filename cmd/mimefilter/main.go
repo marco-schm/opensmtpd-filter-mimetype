@@ -55,7 +55,6 @@ func main() {
 	registered := false
 	for scanner.Scan() {
 		line := scanner.Text()
-		logging.Debug("RAW LINE: %s", line)
 
 		// smtpd starts with a config handshake ending in "config|ready";
 		// registrations must only be sent after that.
@@ -68,8 +67,6 @@ func main() {
 					registered = true
 				} else if key == "smtpd-version" {
 					logging.Info("Connected to smtpd version %s", safe(kv, 2))
-				} else {
-					logging.Debug("smtpd config: %s=%s", key, safe(kv, 2))
 				}
 				continue
 			}
@@ -93,8 +90,8 @@ func main() {
 
 		func() {
 			defer func() {
-				if r := recover(); r != nil {
-					logging.Warn("PANIC RECOVERED: %v", r)
+				if recover() != nil {
+					logging.Warn("Unexpected filter failure")
 				}
 			}()
 
