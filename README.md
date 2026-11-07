@@ -10,7 +10,7 @@ This project is a MIME Whitelist Filter for the OpenSMTPD Mail Transfer Agent. I
 
 * **Strict Whitelist Control:** Blocks all attachments whose MIME type is not explicitly allowed.
 * **YAML Configuration:** Enables simple, commented management of the whitelist (`allowed_mime_types`) and logging settings.
-* **Configurable Logging:** Supports adjustable logging levels (`debug`, `info`, `warn`) for granular monitoring via Syslog.
+* **Configurable Logging:** Supports adjustable logging levels (`debug`, `info`, `warn`) via Syslog. Debug logs do not include message lines, header values, attachment names, or panic values.
 
 ## Installation and Build
 
@@ -19,8 +19,8 @@ This project is a MIME Whitelist Filter for the OpenSMTPD Mail Transfer Agent. I
 Clone the repository and use the provided `Makefile`:
 
 ```bash
-git clone https://github.com/marco-schm/opensmtpd-mime-filter.git
-cd opensmtpd-mime-filter
+git clone https://github.com/marco-schm/opensmtpd-filter-mimetype.git
+cd opensmtpd-filter-mimetype
 make build
 ```
 ## Deployment

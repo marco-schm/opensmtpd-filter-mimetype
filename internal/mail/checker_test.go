@@ -12,6 +12,18 @@ var testAllowed = map[string]bool{
 	"text/plain":      true,
 }
 
+func TestRejectReasonDoesNotRevealAttachmentName(t *testing.T) {
+	const privateName = "confidential-client-list.exe"
+	message := "Content-Type: multipart/mixed; boundary=B\n\n" +
+		"--B\nContent-Type: application/octet-stream\n" +
+		"Content-Disposition: attachment; filename=\"" + privateName + "\"\n\n" +
+		binaryBody + "\n--B--\n"
+	reason := check(t, message)
+	if reason == "" || strings.Contains(reason, privateName) {
+		t.Fatalf("rejection reason missing or reveals attachment name: %q", reason)
+	}
+}
+
 // binaryBody sniffs as application/octet-stream (not in the allowlist).
 const binaryBody = "\x01\x02\x03\x04\xff\xfe\x00\x00"
 
